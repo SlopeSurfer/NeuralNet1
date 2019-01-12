@@ -7,6 +7,10 @@
 *.userosscache
 *.sln.docstates
 
+# Ignore my data
+data/
+dataR/
+
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
 

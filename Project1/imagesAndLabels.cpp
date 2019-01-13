@@ -88,6 +88,23 @@ imagesAndLabels::~imagesAndLabels()
 {
 }
 
+void imagesAndLabels::displayImage(int imageToCheck){
+	assert(imageToCheck > 0 && imageToCheck <= numImages);
+	cout << "\nLabel at " << imageToCheck << " = " << labels[imageToCheck];
+	for (int iCnt = 0; iCnt < numRows; iCnt++) {
+		cout << "\n";
+		for (int jCnt = 0; jCnt < numCols; jCnt++) {
+			if (images[imageToCheck] [iCnt] [jCnt]) {
+				cout << " " << " ";
+			}
+			else
+			{
+				cout << " " << 0;
+			}
+			//				cout << " " << testImages.getPixel(imageToCheck, iCnt, jCnt);
+		}
+	}
+}
 double imagesAndLabels::getPixel(int imageNumber, int row, int col) {
 	return(images[imageNumber] [row] [col]);
 }

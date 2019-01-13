@@ -17,6 +17,7 @@ class imagesAndLabels
 public:
 	imagesAndLabels(string fileNameImages, string fileNameLabels);
 	~imagesAndLabels();
+	void displayImage(int imageNum);
 	double getPixel(int imageNumber, int row, int col);
 	double getLabel(int imageNumber);
 	int getNumImages();

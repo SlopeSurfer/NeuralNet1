@@ -21,9 +21,15 @@
     <ClCompile Include="imagesAndLabels.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="CNNStructure.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="imagesAndLabels.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="CNNStructure.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

@@ -6,39 +6,37 @@
 #include <vector>
 #include <string>	//Include this not to get string, but to get operators like << on string. 
 #include "imagesAndLabels.h"
+#include "CNNStructure.h"
 
 using namespace std;
 
 int main() {
-	cout << "Hello World!";
 
 	string fileNameLabels = "./data/t10k-labels.idx1-ubyte";
 	string fileNameImages = "./data/t10k-images.idx3-ubyte";
 
 	imagesAndLabels testImages(fileNameImages, fileNameLabels);
 
-	int imageToCheck = 1;
-	cout << "\nLabel at " <<imageToCheck<< testImages.getLabel(imageToCheck);
-	cout << "\nImage at " << imageToCheck<< endl;
+	testImages.displayImage(5);
 
-	while (imageToCheck > 0 && imageToCheck < testImages.getNumImages()) {
-		cout << "\nLabel at " << imageToCheck<<" = " << testImages.getLabel(imageToCheck);
-		for (int iCnt = 0; iCnt < testImages.getNumRows(); iCnt++) {
-			cout << "\n";
-			for (int jCnt = 0; jCnt < testImages.getNumCols(); jCnt++) {
-				if (testImages.getPixel(imageToCheck, iCnt, jCnt)) {
-					cout << " " << " ";
-				}
-				else
-				{
-					cout << " " << 0;
-				}
-//				cout << " " << testImages.getPixel(imageToCheck, iCnt, jCnt);
-			}
-		}
-		cout << "\nEnter an image number";
-		cin >> imageToCheck;
-	}
+// Set up a test case for the structure
+	vector<int> testCase1;
+	testCase1.push_back(3);
+	testCase1.push_back(2);
+	testCase1.push_back(2);
+
+	CNNStructure testStruct(testCase1);
+
+	vector<double> input1;
+	input1.push_back(.5);
+	input1.push_back(.1);
+	input1.push_back(.5);
+
+	vector<double> desiredOut1;
+	desiredOut1.push_back(.7);
+	desiredOut1.push_back(.2);
+
+cout << "\nCalc 1 " << testStruct.calcCost(input1, desiredOut1);
 
 	return 0;
 }

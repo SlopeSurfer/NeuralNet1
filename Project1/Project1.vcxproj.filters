@@ -32,5 +32,8 @@
     <ClInclude Include="CNNStructure.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="myMathHelpers.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

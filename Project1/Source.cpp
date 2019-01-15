@@ -7,6 +7,7 @@
 #include <string>	//Include this not to get string, but to get operators like << on string. 
 #include "imagesAndLabels.h"
 #include "CNNStructure.h"
+#include "myMathHelpers.h"
 
 using namespace std;
 
@@ -37,6 +38,15 @@ int main() {
 	desiredOut1.push_back(.2);
 
 cout << "\nCalc 1 " << testStruct.calcCost(input1, desiredOut1);
+
+input1.push_back(1.);	// To pick up the bias terms
+vector<double> vecBack = vecMatMult(input1, testStruct.getSingleMat());
+cout << "\nThe two a values " << vecBack[0] << " " << vecBack[1];
+double cost = 0, tempSum = 0;
+for (int iCnt = 0; iCnt < 2; iCnt++) {
+	tempSum += pow((desiredOut1[iCnt] - vecBack[iCnt]),2);
+}
+cout << "\nCost by singleMat method "<<tempSum;
 
 	return 0;
 }

@@ -1,9 +1,8 @@
 #include "CNNStructure.h"
 #include <assert.h>
 #include <iostream>
+#include "myMathHelpers.h"
 using namespace std;
-
-
 
 CNNStructure::CNNStructure(vector<int> structure)
 {
@@ -31,19 +30,48 @@ CNNStructure::CNNStructure(vector<int> structure)
 			tRows.push_back(tCols);
 		} 
 //Add the bias here.
+		
 		weights.push_back(tRows);
 	}
-//Test
-	cout << "\nweights[0][0].size() " << weights[0][0].size() << " weights[0].size " << weights[0].size();
-	for (int layerCount = 0; layerCount < layers.size()-1; ++layerCount) {
-		cout << "\n\n";
+
+cout<< "\nTest multi matrix initialization";
+	for (int layerCount = 0; layerCount < weights.size(); ++layerCount) {
+		cout << "\nLayerCount "<<layerCount<<weights[layerCount]<<"\n";
+	}
+// Combine the multiple layer matrices into a single transform.
+// Put weights layer 0 into the new matrix. Add the extra column and row.
+	for (int rowCount = 0; rowCount < weights[0].size(); ++rowCount) {
+		vector<double>tempVec;
+		for (int colCount = 0; colCount < weights[0][0].size(); ++colCount){ 
+			tempVec.push_back(weights[0][rowCount][colCount]);
+		}
+		if (rowCount != weights[0].size() - 1) {
+			tempVec.push_back(0);
+		}
+		else
+		{
+			tempVec.push_back(1);
+		}
+		singleMat.push_back(tempVec);
+	}
+	cout << "\nOriginal singleMat "<<singleMat;
+
+	for (int layerCount = 0; layerCount < weights.size() - 1; ++layerCount) {
 		for (int rowCount = 0; rowCount < weights[layerCount].size(); ++rowCount) {
-			cout << "\n";
+			vector<double> tempVec;
 			for (int colCount = 0; colCount < weights[layerCount][0].size(); ++colCount) {
-				cout << weights[layerCount][rowCount][colCount]<<" ";
+				double tempSum = 0;
+				for (int iCnt = 0; iCnt < weights[layerCount+1].size(); ++iCnt) {
+					tempSum += singleMat[rowCount][iCnt] * weights[layerCount+1][iCnt][colCount];
+				}
+				tempVec.push_back(tempSum);
+			}
+			for (int colCount = 0; colCount < weights[layerCount][0].size(); ++colCount) {
+				singleMat[rowCount][colCount] = tempVec[colCount];
 			}
 		}
 	}
+	cout << "\nFinished singleMat " << singleMat;
 }
 
 CNNStructure::~CNNStructure()
@@ -51,7 +79,7 @@ CNNStructure::~CNNStructure()
 }
 
 double CNNStructure::calcCost(vector<double> input, vector<double> desired) {
-
+	cout << "\nMulti matrix method";
 	double sum = 0;
 	vector<double> nextNodes = input;
 	for (int layerCount = 0; layerCount < weights.size(); ++layerCount) {

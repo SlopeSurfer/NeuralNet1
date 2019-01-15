@@ -150,6 +150,7 @@
   <ItemGroup>
     <ClInclude Include="CNNStructure.h" />
     <ClInclude Include="imagesAndLabels.h" />
+    <ClInclude Include="myMathHelpers.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

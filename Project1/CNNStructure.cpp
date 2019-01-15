@@ -80,35 +80,34 @@ CNNStructure::~CNNStructure()
 
 double CNNStructure::calcCost(vector<double> input, vector<double> desired) {
 	cout << "\nMulti matrix method";
-	double sum = 0;
+//It is assumed that the user supplies an input vector that only has the nodes and not
+//the additional 1 that adds in the biases. 
 	vector<double> nextNodes = input;
+	nextNodes.push_back(1.);
+	assert(nextNodes.size() == weights[0].size());
 	for (int layerCount = 0; layerCount < weights.size(); ++layerCount) {
-		vector<double> tempVec;
-		for (int colCount = 0; colCount < weights[layerCount][0].size(); ++colCount) {
-			double rowSum = 0;
-			for (int rowCount = 0; rowCount < weights[layerCount].size(); ++rowCount) {
-				if (rowCount == weights[layerCount].size()-1) {
-					rowSum += weights[layerCount][rowCount][colCount];
-				}
-				else {
-					rowSum += weights[layerCount][rowCount][colCount] * nextNodes[rowCount];
-				}
-			}
-			//Sigma function here.
-			if (rowSum < 0.)rowSum = 0.;
-			if (rowSum > 1.)rowSum = 1.;
-			tempVec.push_back(rowSum);
-			cout << "\nrowSum " << rowSum;
-		}
+		vector<double> tempVec = vecMatMult(nextNodes, weights[layerCount]);
+		cout << "\nNodes for layer " << layerCount << " " << tempVec;
+		nextNodes.clear();
 		nextNodes = tempVec;
+		//Sigma function
+		for (int iCnt = 0; iCnt < tempVec.size(); ++iCnt) {
+			if (tempVec[iCnt] > 1.) {
+				tempVec[iCnt] = 1.;
+			}
+			if (tempVec[iCnt] < 0.) {
+				tempVec[iCnt] = 0.;
+			}
+		}
+		nextNodes.push_back(1.);
 	}
-	double costSum = 0;
-
-	for (int iCnt = 0; iCnt < nextNodes.size(); ++iCnt) {
+	double costSum = 0.;
+	for (int iCnt = 0; iCnt < nextNodes.size()-1; ++iCnt) {
 		costSum += pow((nextNodes[iCnt] - desired[iCnt]),2);
 	}
 	return(costSum);
 }
+
 double CNNStructure::getNumWeightsMatrices() {
 	return(weights.size());
 }

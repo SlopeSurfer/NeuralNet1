@@ -18,12 +18,12 @@ int main() {
 
 	imagesAndLabels testImages(fileNameImages, fileNameLabels);
 
-	testImages.displayImage(5);
+	testImages.displayImage(7);
 
 // Set up a test case for the structure
 	vector<int> testCase1;
+	testCase1.push_back(5);
 	testCase1.push_back(3);
-	testCase1.push_back(2);
 	testCase1.push_back(2);
 
 	CNNStructure testStruct(testCase1);
@@ -32,12 +32,14 @@ int main() {
 	input1.push_back(.5);
 	input1.push_back(.1);
 	input1.push_back(.5);
+	input1.push_back(.0);
+	input1.push_back(.2);
 
 	vector<double> desiredOut1;
 	desiredOut1.push_back(.7);
 	desiredOut1.push_back(.2);
 
-cout << "\nCalc 1 " << testStruct.calcCost(input1, desiredOut1);
+cout << "\nCalc " << testStruct.calcCost(input1, desiredOut1)<<"\n";
 
 input1.push_back(1.);	// To pick up the bias terms
 vector<double> vecBack = vecMatMult(input1, testStruct.getSingleMat());

@@ -29,9 +29,9 @@ ostream& operator<<(ostream& os, const vector<vector<T>>& v)
 	return os;
 }
 
-// Template to multiply a vector by a matrix
+// Template to multiply a vector (left side) by a matrix (right side)
 template <typename T>
-vector<T> vecMatMult(vector<T> inVec, vector<vector<T>> inMat) {
+vector<T> vecMatMult(const vector<T>& inVec, const vector<vector<T>>& inMat) {
 	vector <T> tempVec;
 	assert(inVec.size() == inMat.size());
 
@@ -44,4 +44,21 @@ vector<T> vecMatMult(vector<T> inVec, vector<vector<T>> inMat) {
 	}
 	return(tempVec);
 }
+
+// Template to multiply a matrix (left side) by a vector (right side)
+template <typename T>
+vector<T> matVecMult(const vector<vector<T>>& inMat,const vector<T>& inVec ) {
+	vector <T> tempVec;
+	assert(inVec.size() == inMat[0].size());
+
+	for (int rowCount = 0; rowCount < inMat.size(); rowCount++) {
+		double tempSum = 0;
+		for (int indexCount = 0; indexCount < inVec.size(); indexCount++) {
+			tempSum += inVec[indexCount] * inMat[rowCount][indexCount];
+		}
+		tempVec.push_back(tempSum);
+	}
+	return(tempVec);
+}
+
 #endif

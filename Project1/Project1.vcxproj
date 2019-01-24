@@ -145,12 +145,14 @@
   <ItemGroup>
     <ClCompile Include="CNNStructure.cpp" />
     <ClCompile Include="imagesAndLabels.cpp" />
+    <ClCompile Include="simpleDataSet1.cpp" />
     <ClCompile Include="Source.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CNNStructure.h" />
     <ClInclude Include="imagesAndLabels.h" />
     <ClInclude Include="myMathHelpers.h" />
+    <ClInclude Include="simpleDataSet1.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

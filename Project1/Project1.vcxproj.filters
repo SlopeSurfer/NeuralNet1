@@ -24,6 +24,9 @@
     <ClCompile Include="CNNStructure.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="simpleDataSet1.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="imagesAndLabels.h">
@@ -33,6 +36,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="myMathHelpers.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="simpleDataSet1.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

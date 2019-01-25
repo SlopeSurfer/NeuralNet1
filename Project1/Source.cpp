@@ -15,24 +15,6 @@ using namespace std;
 int main() {
 
 //Test vector subtraction overload
-#ifdef _DEBUG
-	vector<double> T1, T2, T3;
-	T1.push_back(3.);
-	T1.push_back(-3.);
-	T1.push_back(2.);
-	T1.push_back(1.);
-
-	T2.push_back(1.);
-	T2.push_back(2.);
-	T2.push_back(3.);
-	T2.push_back(0.);
-
-	T3 = T2 - T1;
-	cout<<"\nBack from subtraction test, should be -2., 5., 1., -1."<<T3;
-
-	T3 = 2.*T2;
-	cout << "\nBack from scaler mult test, should be 2., 4., 6., 0." << T3;
-#endif
 
 /*	string fileNameLabels = "./data/t10k-labels.idx1-ubyte";
 	string fileNameImages = "./data/t10k-images.idx3-ubyte";
@@ -42,7 +24,8 @@ int main() {
 	testImages.displayImage(7);
 */
 // Set up a test case for the structure
-	vector<int> testCase1;	// Implies two layers of size 3 and 2.
+	vector<int> testCase1;	// Implies two layers of size 3, 2, and 2.
+	testCase1.push_back(3);
 	testCase1.push_back(3);
 	testCase1.push_back(2);
 
@@ -74,7 +57,7 @@ int main() {
 
 	CNNStructure holdAccumGradients(testCase1);
 	vector<double> costHistory;
-	simpleDataSet1 data1(testCase1, 100), data2(testCase1, 100);
+	simpleDataSet1 data1(testCase1, 40), data2(testCase1, 40);
 //Get the starting cost.
 	double tempCost = 0.;
 
@@ -85,7 +68,7 @@ int main() {
 	costHistory.push_back(tempCost);
 
 //Start training
-	size_t numTrainingLoops = 500;
+	size_t numTrainingLoops = 300;
 	for (size_t trainLoops = 0; trainLoops < numTrainingLoops; ++trainLoops) {
 		for (size_t tSet = 0; tSet < data1.getSimpleTestSize(); ++tSet) {
 			testStruct.updateLayers(data1.getSimpleTest(tSet));
@@ -141,6 +124,7 @@ for (size_t tSet = 0; tSet < data2.getSimpleTestSize(); ++tSet) {
 			}
 			else {
 				++countMisses;
+				cout << "Missed this case 0\n\n";
 			}
 		}
 		else
@@ -148,6 +132,7 @@ for (size_t tSet = 0; tSet < data2.getSimpleTestSize(); ++tSet) {
 			if (testStruct.getLayerNodes(testStruct.getNumWeightsMatrices())[0] >=
 				testStruct.getLayerNodes(testStruct.getNumWeightsMatrices())[1]) {
 				++countMisses;
+				cout << "Missed this case 1\n\n";
 			}
 			else {
 				++countHits;

@@ -21,13 +21,28 @@ CNNStructure::CNNStructure(const vector<int>& structure, double w, double b)
 			vector<double> tCols;
 			for (int colCount = 0; colCount < structure[layerCount]+1; ++colCount) {
 				if (colCount != structure[layerCount]) {
-					tCols.push_back(w);
+					if (w != 0.) {
+						tCols.push_back(float(rand() % 10) / 10.);
+					}
+					else
+					{
+						tCols.push_back(w);
+
+					}
 				}
 				else
 				{
-					tCols.push_back(b);
+					if (b != 0) {
+						tCols.push_back(float(rand() % 10) / 10.);
+					}
+					else
+					{
+						tCols.push_back(b);
+
+					}
 				}
 			}
+		
 			if (rowCount == structure[layerCount + 1]) {
 				for (size_t iCnt = 0; iCnt < structure[layerCount]; ++iCnt) {
 					tCols[iCnt] = 0.;
@@ -123,7 +138,7 @@ void CNNStructure::updateLayers(const vector<double>& input) {
 		for (int iCnt = 0; iCnt < tempVec.size(); ++iCnt) {
 
 			if (tempVec[iCnt] < 0.) {
-				tempVec[iCnt] = 0.;			//Comment it to Kill it till you understand it.
+//				tempVec[iCnt] = 0.;			//Comment it to Kill it till you understand it.
 			}
 		}
 		layerNodes[layerCount+1] = tempVec;
@@ -148,27 +163,52 @@ void CNNStructure::makeGradPass(CNNStructure& tempGradStruct,const vector<double
 // together to form each element. I believe that I need to complete a layer (from back to front) 
 // before proceding to the next layer. The reason is that you need the results of layer L
 // inorder to get a cost for L-1.
+	vector<double> pCpA;
 	for (size_t layerCount = weights.size(); layerCount > 0; --layerCount) {
-		vector<double> z = matVecMult(weights[layerCount-1], layerNodes[layerCount-1]);
-		vector<double> pCpA = layerNodes[layerCount]-desired;
-		pCpA = 2.*pCpA;
-		for (size_t rowCount = 0; rowCount < weights[layerCount-1].size()-1; ++rowCount) {
-			if (z[rowCount] < 0.) {
-				z[rowCount] = 0.;
+		vector<double> partRelu = matVecMult(weights[layerCount - 1], layerNodes[layerCount - 1]);
+		if (layerCount == weights.size()) {
+			pCpA = 2 * (layerNodes[layerCount] - desired); //Overloaded mult and minus.
+		}
+//Sigma
+		for (size_t rowCount = 0; rowCount < weights[layerCount - 1].size() - 1; ++rowCount) {
+
+			if (partRelu[rowCount] < 0.) {
+				partRelu[rowCount] = 0.;
 			}
 			else {
-				z[rowCount] = 1.;
+				partRelu[rowCount] = 1.;
 			}
-//			z[rowCount] = 1.;	//uncomment here and comment above to Kill sigma till you understand it.
-			for (size_t colCount = 0; colCount < weights[layerCount-1].size(); ++colCount) {
+			partRelu[rowCount] = 1.;	//uncomment here and comment above to Kill sigma till you understand it.
+//			cout<<"\nweights[layerCount - 1][0].size() " << weights[layerCount - 1][0].size();
+			for (size_t colCount = 0; colCount < weights[layerCount - 1][0].size()-1; ++colCount) {
 //(partial z wrt w)*partial relu*pCpA
-				tempGradStruct.weights[layerCount-1][rowCount][colCount] = 
-					layerNodes[layerCount-1][colCount]*z[rowCount]*pCpA[rowCount];
+/*				cout << "\n layerNodes[layerCount - 1][colCount] " << layerNodes[layerCount - 1][colCount];
+				cout << "\nlayerNodes[layerCount - 1][colCount] " << layerNodes[layerCount - 1][colCount];
+				cout << "\n " << partRelu[rowCount];
+				cout << "\npCpA[rowCount] " << pCpA[rowCount]<<" rowCount "<<rowCount;
+*/
+				tempGradStruct.weights[layerCount - 1][rowCount][colCount] =
+					layerNodes[layerCount - 1][colCount] * partRelu[rowCount] *pCpA[rowCount];
+//				cout << "\n tempGradStruct.weights[layerCount - 1][rowCount][colCount] " <<
+					tempGradStruct.weights[layerCount - 1][rowCount][colCount];
 			}
 // Each row also has a bias term at the end of the row.
-			tempGradStruct.weights[layerCount - 1][rowCount][weights[layerCount - 1].size() ] =
-				z[rowCount] * pCpA[rowCount];
+			tempGradStruct.weights[layerCount - 1][rowCount][weights[layerCount - 1][0].size()-1] =
+				partRelu[rowCount] * pCpA[rowCount];
+		}
 
+		if (layerCount > 1) {
+			vector<double> temppCpA;
+			//Calculate the pCpA vector for the next round.
+			for (size_t colCount = 0; colCount < weights[layerCount - 1][0].size()-1; ++colCount) {
+				double tempSum = 0.;
+				for (size_t rowCount = 0; rowCount < weights[layerCount - 1].size() - 1; ++rowCount) {
+					tempSum += weights[layerCount - 1][rowCount][colCount]*partRelu[rowCount]*pCpA[rowCount];
+				}	
+				temppCpA.push_back(tempSum);
+			}
+			pCpA.clear();
+			pCpA =temppCpA;
 		}
 	}
 }

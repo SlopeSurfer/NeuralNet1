@@ -22,10 +22,11 @@ ostream& operator<<(ostream& os, const vector<T>& v)
 template <typename T>
 ostream& operator<<(ostream& os, const vector<vector<T>>& v)
 {
-	os << "\n";
+
 	for (int rowCount = 0; rowCount < v.size(); ++rowCount) {
 			os << v[rowCount];
 	}
+	os << "\n";
 	return os;
 }
 
@@ -33,10 +34,11 @@ ostream& operator<<(ostream& os, const vector<vector<T>>& v)
 template <typename T>
 ostream& operator<<(ostream& os, const vector<vector<vector<T>>>& v)
 {
-	os << "\n";
+
 	for (int layerCount = 0; layerCount < v.size(); ++layerCount) {
 		os << v[layerCount];
 	}
+	os << "\n";
 	return os;
 }
 
@@ -102,6 +104,5 @@ vector<T> operator*(double scaler, const vector<T>& rhs)
 	}
 	return tempVec;
 }
-
 
 #endif

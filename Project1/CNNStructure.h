@@ -10,7 +10,9 @@ class CNNStructure
 
 public:
 	CNNStructure(const vector<int>& structure,double w = 0.,double b = 0.);
+	CNNStructure(const string& inFile);
 //	~CNNStructure();
+	void addLayers(const vector<int>& structure);
 	double calcCost(const vector<double>& input, const vector<double>& desired);
 	size_t getNumWeightsMatrices();
 	size_t getNumWeightsRows(size_t layerNum);
@@ -23,6 +25,8 @@ public:
 	void updateLayers(const vector<double>& input);
 	void divideScaler(const double& factor);
 	void makeGradPass(CNNStructure& tempGradStruct, const vector<double>& desired);
+	void writeToFile(const string& fileName);
+	vector<int> readFromFile(const string& inFileName);
 
 };
 

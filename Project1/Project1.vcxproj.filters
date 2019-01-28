@@ -24,7 +24,10 @@
     <ClCompile Include="CNNStructure.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="simpleDataSet1.cpp">
+    <ClCompile Include="dataSet.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="handNumberData.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -38,7 +41,10 @@
     <ClInclude Include="myMathHelpers.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="simpleDataSet1.h">
+    <ClInclude Include="dataSet.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="handNumberData.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

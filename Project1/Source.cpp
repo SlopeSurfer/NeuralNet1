@@ -1,48 +1,51 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
-//#include <opencv2/opencv.hpp>
-
 #include <vector>
 #include <string>	//Include this not to get string, but to get operators like << on string. 
 #include "imagesAndLabels.h"
 #include "CNNStructure.h"
 #include "myMathHelpers.h"
-#include "simpleDataSet1.h"
-
+#include "dataSet.h"
+#include "handNumberData.h"
 using namespace std;
 
 int main() {
 
-//Test vector subtraction overload
+//Set up the training data.
+	size_t numToSave;
+	double gradientCutDown = 50.;
+	size_t lapCounter = 0,numBetweenPrints = 9,numSinceLastPrint = 0;
+	// Set up a test case for the structure
+	vector<int> testCase;
 
-/*	string fileNameLabels = "./data/t10k-labels.idx1-ubyte";
+	string fileNameLabels = "./data/t10k-labels.idx1-ubyte";
 	string fileNameImages = "./data/t10k-images.idx3-ubyte";
 
-	imagesAndLabels testImages(fileNameImages, fileNameLabels);
+	handNumberData data1(fileNameImages, fileNameLabels);
+	data1.displayImage(5);
+	testCase.push_back((int)data1.getInputDimension());
+	testCase.push_back(16);
+	testCase.push_back(16);
+	testCase.push_back((int)data1.getOutputDimension() );
 
-	testImages.displayImage(7);
-*/
-// Set up a test case for the structure
-	vector<int> testCase1;	// Implies two layers of size 3, 2, and 2.
-	testCase1.push_back(3);
-	testCase1.push_back(3);
-	testCase1.push_back(2);
+	numToSave = 200;
+/*
+	dataSet data1(80), data2(40);
+	
+	testCase.push_back((int)data1.getInputDimension());
+	testCase.push_back(3);
+	testCase.push_back(3);
+	testCase.push_back((int)data1.getOutputDimension());
+	numToSave = 40;
+*/	
+	cout << "\ndata1.getOutputDimension() " << data1.getOutputDimension();
+	cout << "\ndata1.getInputDimension() " << data1.getInputDimension();
+	
+//	CNNStructure testStruct(testCase, .5, 1.);
+	CNNStructure testStruct("./states/weightsFile4.txt");
 
-	CNNStructure testStruct(testCase1,.5,1.);	
-
-	cout << "\nShow the matricies " << endl;
-	for (size_t iCnt = 0; iCnt < testStruct.getNumWeightsMatrices(); ++iCnt) {
-		cout << "\n Layer " << iCnt << endl;
-		testStruct.displayWeights(iCnt);
-	}
-
-	cout << "\nShow the default layerNodes" << endl;
-	for (size_t iCnt = 0; iCnt < testStruct.getNumWeightsMatrices()+1; ++iCnt) {
-		cout << "\n Layer " << iCnt << endl;
-		testStruct.displayLayerNodes(iCnt);
-	}
-
+//	testStruct.displayWeights(1);
 // CNN. You start with a set of weights and biases. While you can calculate a cost from that, it does
 // not fit into the data you need to calculate the gradient. Calculating the gradient is done over some test
 // set. You effectively calculate it for each set but only use the average over the set before you use it to change
@@ -55,90 +58,116 @@ int main() {
 // in with the rest. 
 // Loop over the training set.
 
-	CNNStructure holdAccumGradients(testCase1);
-	vector<double> costHistory;
-	simpleDataSet1 data1(testCase1, 40), data2(testCase1, 40);
-//Get the starting cost.
-	double tempCost = 0.;
+#ifdef _DEBUG
 
-	for (size_t tSet = 0; tSet < data1.getSimpleTestSize(); ++tSet) {
-		tempCost += testStruct.calcCost(data1.getSimpleTest(tSet), data1.getSimpleNodeLabels(tSet)) / double(data1.getSimpleTestSize());
-	}
-	cout << "\nStarting cost "<<tempCost;
-	costHistory.push_back(tempCost);
-
-//Start training
-	size_t numTrainingLoops = 300;
-	for (size_t trainLoops = 0; trainLoops < numTrainingLoops; ++trainLoops) {
-		for (size_t tSet = 0; tSet < data1.getSimpleTestSize(); ++tSet) {
-			testStruct.updateLayers(data1.getSimpleTest(tSet));
-			CNNStructure holdTempGradients(testCase1);
-
-// Fill holdTempGradients for this test set. 
-			testStruct.makeGradPass(holdTempGradients, data1.getSimpleNodeLabels(tSet));
-
-// Add the temp to the accumulator
-			holdAccumGradients += holdTempGradients;
-		}
-// Divide by the number of entries. You may want to do other things to reduce it as well.
-		holdAccumGradients.divideScaler(double(-10.*data1.getSimpleTestSize()));
-
-// Modify the weights and biases.
-		testStruct += holdAccumGradients;
-
-// Calculate and store the new cost.To do this, sum up the cost across the entire data set. 
-// Note, this not really required for the training. It is so I can get a look at how the
-// training progressed. I should see if I could get it cheaply as part of the calculation of 
-// the gradient. For example, calculating a cost is not expensive if the layerNodes have
-// already been updated. 
-
-		double tempCost = 0.;
-		for (size_t tSet = 0; tSet < data1.getSimpleTestSize(); ++tSet) {
-			tempCost+=testStruct.calcCost(data1.getSimpleTest(tSet), data1.getSimpleNodeLabels(tSet))/double(data1.getSimpleTestSize());
-		}
-		costHistory.push_back(tempCost);
-	}
-	cout << "\nFinal structure " << endl;
+	cout << "\nShow the matricies " << endl;
 	for (size_t iCnt = 0; iCnt < testStruct.getNumWeightsMatrices(); ++iCnt) {
 		cout << "\n Layer " << iCnt << endl;
 		testStruct.displayWeights(iCnt);
 	}
 
-	cout << "\nCost history\n";
-	cout << costHistory;
+	cout << "\nShow the default layerNodes" << endl;
+	for (size_t iCnt = 0; iCnt < testStruct.getNumWeightsMatrices() + 1; ++iCnt) {
+		cout << "\n Layer " << iCnt << endl;
+		testStruct.displayLayerNodes(iCnt);
+	}
+#endif // !_DEBUG
+	CNNStructure holdAccumGradients(testCase);
+	vector<double> costHistory;
+//Get the starting cost.
+	double tempCost = 0.;
 
+	for (size_t tSet = 0; tSet < data1.getNumSets()-numToSave; ++tSet) {
+		tempCost += testStruct.calcCost(data1.getInputNodes(tSet), data1.getOutputNodes(tSet)) / double(data1.getNumSets()-numToSave); 
+	}
+	cout << "\nStarting cost "<<tempCost;
+	costHistory.push_back(tempCost);
+
+//Start training
+//	size_t numTrainingLoops = 4000;
+	size_t numTrainingLoops = 2000;
+	for (size_t trainLoops = 0; trainLoops < numTrainingLoops; ++trainLoops) {
+		for (size_t tSet = 0; tSet < data1.getNumSets()-numToSave; ++tSet) {
+			testStruct.updateLayers(data1.getInputNodes(tSet));
+			CNNStructure holdTempGradients(testCase);
+
+// Fill holdTempGradients for this test set. 
+			testStruct.makeGradPass(holdTempGradients, data1.getOutputNodes(tSet));
+
+
+// Add the temp to the accumulator
+			holdAccumGradients += holdTempGradients;
+		}
+
+// Divide by the number of entries. You may want to do other things to reduce it as well.
+		holdAccumGradients.divideScaler(double(-gradientCutDown*data1.getNumSets()-numToSave));
+
+// Modify the weights and biases.
+		testStruct += holdAccumGradients;
+// Calculate and store the new cost.To do this, sum up the cost across the entire data set. 
+// Note, this is not really required for the training. It is so I can get a look at how the
+// training progressed. I should see if I could get it cheaply as part of the calculation of 
+// the gradient. For example, calculating a cost is not expensive if the layerNodes have
+// already been updated. 
+
+		double tempCost = 0.;
+		for (size_t tSet = 0; tSet < data1.getNumSets()-numToSave; ++tSet) {
+			tempCost+=testStruct.calcCost(data1.getInputNodes(tSet), data1.getOutputNodes(tSet))/double(data1.getNumSets()-numToSave);
+		}
+		costHistory.push_back(tempCost);
+		++lapCounter;
+//		if (lapCounter > 5)gradientCutDown = 10.;
+//		if (lapCounter > 20)gradientCutDown = 5.;
+
+		if (numSinceLastPrint > numBetweenPrints) {
+			numSinceLastPrint = 0;
+			cout << "[" << lapCounter << "] " << tempCost;
+		}
+		++numSinceLastPrint;
+	}
+//	cout << "\nFinal structure " << endl;
+//	for (size_t iCnt = 0; iCnt < testStruct.getNumWeightsMatrices(); ++iCnt) {
+//		cout << "\n Layer " << iCnt << endl;
+//		testStruct.displayWeights(iCnt);
+//	}
+
+	cout << "\nCost history";
+	cout << costHistory;
+//Write the weights structure to file
+	testStruct.writeToFile("./states/weightsFile5.txt");
 // You should now have a trained network. Try it on some cases.
 size_t countHits = 0, countMisses = 0;
-for (size_t tSet = 0; tSet < data2.getSimpleTestSize(); ++tSet) {
-		testStruct.updateLayers(data2.getSimpleTest(tSet));
 
-		cout << "\n simpleTest " << data2.getSimpleTest(tSet);
-		cout << " simpleNodes " << data2.getSimpleNodeLabels(tSet);
+for (size_t tSet = data1.getNumSets()-numToSave; tSet < data1.getNumSets(); ++tSet) {
+		testStruct.updateLayers(data1.getInputNodes(tSet));
+
+//		cout << "\n simpleTest " << data1.getInputNodes(tSet);
+		cout << "\nsimpleNodes " << data1.getOutputNodes(tSet);
+		cout << "Associated label " << data1.getLabels(tSet)<<endl;
 
 		testStruct.displayLayerNodes(testStruct.getNumWeightsMatrices());
 
-		if (data2.getSimpleNodeLabels(tSet)[0] == 1) {
-			if (testStruct.getLayerNodes(testStruct.getNumWeightsMatrices())[0] >
-				testStruct.getLayerNodes(testStruct.getNumWeightsMatrices())[1]) {
-				++countHits;
+		double max = -10.;
+		size_t indexToKeep = 0;
+		for (size_t iCnt = 0; iCnt < data1.getOutputDimension();++iCnt) {
+//Find the largest
+			if (testStruct.getLayerNodes(testStruct.getNumWeightsMatrices())[iCnt] > max) {
+				max = testStruct.getLayerNodes(testStruct.getNumWeightsMatrices())[iCnt];
+				indexToKeep = iCnt;
 			}
-			else {
-				++countMisses;
-				cout << "Missed this case 0\n\n";
-			}
+		}
+		cout << "indexToKeep " << indexToKeep << " label " << data1.getLabels(tSet)<<"\n\n";
+		if (indexToKeep == data1.getLabels(tSet)) {
+
+			++countHits;
 		}
 		else
 		{
-			if (testStruct.getLayerNodes(testStruct.getNumWeightsMatrices())[0] >=
-				testStruct.getLayerNodes(testStruct.getNumWeightsMatrices())[1]) {
-				++countMisses;
-				cout << "Missed this case 1\n\n";
-			}
-			else {
-				++countHits;
-			}
+			++countMisses;
+			data1.displayImage(tSet);
 		}
 	}
 	cout << "\nNumber of hits == " << countHits << " Number of misses = " << countMisses;
+
 	return 0;
 }

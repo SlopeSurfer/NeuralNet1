@@ -134,6 +134,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
     </ClCompile>
     <Link>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
@@ -144,15 +145,17 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="CNNStructure.cpp" />
+    <ClCompile Include="handNumberData.cpp" />
     <ClCompile Include="imagesAndLabels.cpp" />
-    <ClCompile Include="simpleDataSet1.cpp" />
+    <ClCompile Include="dataSet.cpp" />
     <ClCompile Include="Source.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CNNStructure.h" />
+    <ClInclude Include="handNumberData.h" />
     <ClInclude Include="imagesAndLabels.h" />
     <ClInclude Include="myMathHelpers.h" />
-    <ClInclude Include="simpleDataSet1.h" />
+    <ClInclude Include="dataSet.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

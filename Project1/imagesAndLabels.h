@@ -18,11 +18,12 @@ public:
 	imagesAndLabels(string fileNameImages, string fileNameLabels);
 	~imagesAndLabels();
 	void displayImage(int imageNum);
-	double getPixel(int imageNumber, int row, int col);
-	double getLabel(int imageNumber);
+	size_t getPixel(int imageNumber, int row, int col);
+	size_t getLabel(int imageNumber);
 	int getNumImages();
 	int getNumRows();
 	int getNumCols();
+	friend class handNumberData;
 };
 
 #endif

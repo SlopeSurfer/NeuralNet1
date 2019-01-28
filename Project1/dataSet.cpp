@@ -1,6 +1,6 @@
-#include "simpleDataSet1.h"
+#include "dataSet.h"
 #include <assert.h>
-simpleDataSet1::simpleDataSet1(vector<int> testStructDescription,size_t numTests)
+dataSet::dataSet(size_t numTests)
 {
 //I'd like a test example that is small enough that I can calculate some 
 // of it by hand. I'm going to feed it vectors that have random numbers between 0 and 1. 
@@ -11,11 +11,10 @@ simpleDataSet1::simpleDataSet1(vector<int> testStructDescription,size_t numTests
 // Note also that the original node layer should have the extra 1. at the end. 
 	double nextNum;
 	int tempLabel, tempBit;
-
 	for (int testCnt = 0; testCnt < numTests; ++testCnt) {
 		vector<double> eachVec;
 		tempLabel = 0;
-		for (int iCnt = 0; iCnt < testStructDescription[0]; iCnt++) {
+		for (int iCnt = 0; iCnt <3; iCnt++) {
 			nextNum = float(rand() % 10) / 10.;
 			eachVec.push_back(nextNum);
 			tempBit = int((nextNum + .5));
@@ -36,33 +35,40 @@ simpleDataSet1::simpleDataSet1(vector<int> testStructDescription,size_t numTests
 			tempVecLabel.push_back(1);
 		}
 		eachVec.push_back(1.);
-		simpleTest.push_back(eachVec);
-		simpleLabels.push_back(tempLabel);
-		simpleNodeLabels.push_back(tempVecLabel);
+		inputNodes.push_back(eachVec);
+		labels.push_back(tempLabel);
+		outputNodes.push_back(tempVecLabel);
 	}
-
 }
-
 /*
-simpleDataSet1::~simpleDataSet1()
+dataSet::~dataSet()
 {
 }
 */
 
-size_t simpleDataSet1::getSimpleTestSize() {
-	return simpleTest.size();
+size_t dataSet::getNumSets() {
+	return inputNodes.size();
 }
-vector<double> simpleDataSet1::getSimpleTest(size_t choice) {
-	assert(choice >= 0 && choice < simpleTest.size());
-	return simpleTest[choice];
-}
-
-int simpleDataSet1::getSimpleLabels(size_t choice) {
-	assert(choice >= 0 && choice < simpleLabels.size());
-	return simpleLabels[choice];
+vector<double> dataSet::getInputNodes(size_t choice) {
+	assert(choice >= 0 && choice < inputNodes.size());
+	return inputNodes[choice];
 }
 
-vector<double> simpleDataSet1::getSimpleNodeLabels(size_t choice) {
-	assert(choice >= 0 && choice < simpleNodeLabels.size());
-	return simpleNodeLabels[choice];
+int dataSet::getLabels(size_t choice) {
+	assert(choice >= 0 && choice < labels.size());
+	return labels[choice];
+}
+
+vector<double> dataSet::getOutputNodes(size_t choice) {
+	assert(choice >= 0 && choice < outputNodes.size());
+	return outputNodes[choice];
+}
+
+size_t dataSet::getInputDimension(){
+	return inputNodes[0].size();
+}
+
+size_t dataSet::getOutputDimension() {
+	return outputNodes[0].size();
+
 }

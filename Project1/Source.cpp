@@ -3,6 +3,7 @@
 #include <sstream>
 #include <vector>
 #include <string>	//Include this not to get string, but to get operators like << on string. 
+#include <thread>
 #include "imagesAndLabels.h"
 #include "CNNStructure.h"
 #include "myMathHelpers.h"
@@ -10,11 +11,24 @@
 #include "handNumberData.h"
 using namespace std;
 
+void calcGradientParts(CNNStructure& holdAccumGradients,const vector<int>& testCase,handNumberData& data,
+						CNNStructure& holdTempGradients,CNNStructure testStruct,size_t begin, size_t end) {
+	for (size_t tSet = begin; tSet < end; ++tSet) {
+		testStruct.updateLayers(data.getInputNodes(tSet));
+
+		// Fill holdTempGradients for this test set. 
+		testStruct.makeGradPass(holdTempGradients, data.getOutputNodes(tSet));
+
+		// Add the temp to the accumulator
+		holdAccumGradients += holdTempGradients;
+	}
+}
+
 int main() {
 
 //Set up the training data.
 	size_t numToSave;
-	double gradientCutDown = 50.;
+	double gradientCutDown = 200.;
 	size_t lapCounter = 0,numBetweenPrints = 9,numSinceLastPrint = 0;
 	// Set up a test case for the structure
 	vector<int> testCase;
@@ -43,7 +57,7 @@ int main() {
 	cout << "\ndata1.getInputDimension() " << data1.getInputDimension();
 	
 //	CNNStructure testStruct(testCase, .5, 1.);
-	CNNStructure testStruct("./states/weightsFile4.txt");
+	CNNStructure testStruct("./states/weightsFile8.txt");
 
 //	testStruct.displayWeights(1);
 // CNN. You start with a set of weights and biases. While you can calculate a cost from that, it does
@@ -72,7 +86,7 @@ int main() {
 		testStruct.displayLayerNodes(iCnt);
 	}
 #endif // !_DEBUG
-	CNNStructure holdAccumGradients(testCase);
+
 	vector<double> costHistory;
 //Get the starting cost.
 	double tempCost = 0.;
@@ -85,25 +99,48 @@ int main() {
 
 //Start training
 //	size_t numTrainingLoops = 4000;
-	size_t numTrainingLoops = 2000;
+	size_t numTrainingLoops = 20000;
+//I will need a separate holdTempGradients(testCase) and holdAccumGradients for each thread.
+	CNNStructure holdAccumGradients1(testCase);
+	CNNStructure holdAccumGradients2(testCase);
+	CNNStructure holdAccumGradients3(testCase);
+	CNNStructure holdAccumGradients4(testCase);
+	CNNStructure holdTempGradients1(testCase); //Each member will get set with no depedence on previous.
+	CNNStructure holdTempGradients2(testCase); //Each member will get set with no depedence on previous.
+	CNNStructure holdTempGradients3(testCase); //Each member will get set with no depedence on previous.
+	CNNStructure holdTempGradients4(testCase); //Each member will get set with no depedence on previous.
+	size_t totalSets = data1.getNumSets() - numToSave;
+	size_t numForEachSplit = totalSets / 4;
+	size_t begin1 = 0, end1 = numForEachSplit;
+	size_t begin2 = end1 + 1, end2 = end1 + numForEachSplit;
+	size_t begin3 = end2 + 1, end3 = end2 + numForEachSplit;
+	size_t begin4 = end3 + 1, end4 = end3 + numForEachSplit;
 	for (size_t trainLoops = 0; trainLoops < numTrainingLoops; ++trainLoops) {
-		for (size_t tSet = 0; tSet < data1.getNumSets()-numToSave; ++tSet) {
-			testStruct.updateLayers(data1.getInputNodes(tSet));
-			CNNStructure holdTempGradients(testCase);
 
-// Fill holdTempGradients for this test set. 
-			testStruct.makeGradPass(holdTempGradients, data1.getOutputNodes(tSet));
+		thread t1 = thread(calcGradientParts, ref(holdAccumGradients1), ref(testCase), ref(data1), 
+			ref(holdTempGradients1), testStruct, begin1, end1);
+		thread t2  = thread(calcGradientParts, ref(holdAccumGradients2), ref(testCase), ref(data1),
+			ref(holdTempGradients2), testStruct, begin2, end2);
+		thread t3 = thread (calcGradientParts, ref(holdAccumGradients3), ref(testCase), ref(data1),
+			ref(holdTempGradients3), testStruct, begin3, end3);
+		thread t4 = thread (calcGradientParts, ref(holdAccumGradients4), ref(testCase), ref(data1),
+			ref(holdTempGradients4), testStruct, begin4, end4);
 
+		t1.join();
+		t2.join();
+		t3.join();
+		t4.join();
 
-// Add the temp to the accumulator
-			holdAccumGradients += holdTempGradients;
-		}
+		holdAccumGradients1 += holdAccumGradients2;
+		holdAccumGradients1 += holdAccumGradients3;
+		holdAccumGradients1 += holdAccumGradients4;
 
 // Divide by the number of entries. You may want to do other things to reduce it as well.
-		holdAccumGradients.divideScaler(double(-gradientCutDown*data1.getNumSets()-numToSave));
+		holdAccumGradients1.divideScaler(double(-gradientCutDown*data1.getNumSets()-numToSave));
 
 // Modify the weights and biases.
-		testStruct += holdAccumGradients;
+		testStruct += holdAccumGradients1;
+
 // Calculate and store the new cost.To do this, sum up the cost across the entire data set. 
 // Note, this is not really required for the training. It is so I can get a look at how the
 // training progressed. I should see if I could get it cheaply as part of the calculation of 
@@ -134,7 +171,7 @@ int main() {
 	cout << "\nCost history";
 	cout << costHistory;
 //Write the weights structure to file
-	testStruct.writeToFile("./states/weightsFile5.txt");
+	testStruct.writeToFile("./states/weightsFile9.txt");
 // You should now have a trained network. Try it on some cases.
 size_t countHits = 0, countMisses = 0;
 

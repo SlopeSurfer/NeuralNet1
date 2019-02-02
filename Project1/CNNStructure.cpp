@@ -300,6 +300,6 @@ void CNNStructure::setToZeros() {
 			this->weights[layerCount][rowCount] = vecTemp;
 		}
 
-	}
+	} 
 
 }

@@ -54,7 +54,7 @@ void handNumberData::displayImage(const size_t& imageToCheck) {
 //Reconstruct and display the image. 
 	size_t numRows = inputNodes[0].size() / numCols;
 //	cout << "\nnumRows in image reconstruction " << numRows << " Should be 28 ";
-	assert(imageToCheck > 0 && imageToCheck <= numImages);
+	assert(imageToCheck >= 0 && imageToCheck <= inputNodes.size());
 	cout << "\nLabel at " << imageToCheck << " = " << labels[imageToCheck];
 	for (int iCnt = 0; iCnt < numRows; iCnt++) {
 		cout << "\n";

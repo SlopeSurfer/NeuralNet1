@@ -9,10 +9,12 @@
 #include "myMathHelpers.h"
 #include "dataSet.h"
 #include "handNumberData.h"
+#include <unordered_map>
 using namespace std;
 
 void calcGradientParts(CNNStructure& holdAccumGradients,const vector<int>& testCase,handNumberData& data,
 						CNNStructure& holdTempGradients,CNNStructure testStruct,size_t begin, size_t end) {
+	holdAccumGradients.setToZeros();	//Zero this out because of the += later.
 	for (size_t tSet = begin; tSet < end; ++tSet) {
 		testStruct.updateLayers(data.getInputNodes(tSet));
 
@@ -28,13 +30,13 @@ int main() {
 
 //Set up the training data.
 	size_t numToSave;
-	double gradientCutDown = 200.;
+	double gradientCutDown = 20.;
 	size_t lapCounter = 0,numBetweenPrints = 9,numSinceLastPrint = 0;
 	// Set up a test case for the structure
 	vector<int> testCase;
 
-	string fileNameLabels = "./data/t10k-labels.idx1-ubyte";
-	string fileNameImages = "./data/t10k-images.idx3-ubyte";
+	string fileNameLabels = "./data/train-labels.idx1-ubyte";
+	string fileNameImages = "./data/train-images.idx3-ubyte";
 
 	handNumberData data1(fileNameImages, fileNameLabels);
 	data1.displayImage(5);
@@ -43,7 +45,7 @@ int main() {
 	testCase.push_back(16);
 	testCase.push_back((int)data1.getOutputDimension() );
 
-	numToSave = 200;
+	numToSave = 0;
 /*
 	dataSet data1(80), data2(40);
 	
@@ -57,9 +59,11 @@ int main() {
 	cout << "\ndata1.getInputDimension() " << data1.getInputDimension();
 	
 //	CNNStructure testStruct(testCase, .5, 1.);
-	CNNStructure testStruct("./states/weightsFile8.txt");
+	string inFile = "./states/weightsRound2-19.txt";
+	string outFile = "./states/weightsRound2-20.txt";
+	size_t numTrainingLoops = 2000;
+	CNNStructure testStruct(inFile);
 
-//	testStruct.displayWeights(1);
 // CNN. You start with a set of weights and biases. While you can calculate a cost from that, it does
 // not fit into the data you need to calculate the gradient. Calculating the gradient is done over some test
 // set. You effectively calculate it for each set but only use the average over the set before you use it to change
@@ -99,7 +103,7 @@ int main() {
 
 //Start training
 //	size_t numTrainingLoops = 4000;
-	size_t numTrainingLoops = 20000;
+
 //I will need a separate holdTempGradients(testCase) and holdAccumGradients for each thread.
 	CNNStructure holdAccumGradients1(testCase);
 	CNNStructure holdAccumGradients2(testCase);
@@ -119,11 +123,11 @@ int main() {
 
 		thread t1 = thread(calcGradientParts, ref(holdAccumGradients1), ref(testCase), ref(data1), 
 			ref(holdTempGradients1), testStruct, begin1, end1);
-		thread t2  = thread(calcGradientParts, ref(holdAccumGradients2), ref(testCase), ref(data1),
+		thread t2 = thread(calcGradientParts, ref(holdAccumGradients2), ref(testCase), ref(data1),
 			ref(holdTempGradients2), testStruct, begin2, end2);
-		thread t3 = thread (calcGradientParts, ref(holdAccumGradients3), ref(testCase), ref(data1),
+		thread t3 = thread(calcGradientParts, ref(holdAccumGradients3), ref(testCase), ref(data1),
 			ref(holdTempGradients3), testStruct, begin3, end3);
-		thread t4 = thread (calcGradientParts, ref(holdAccumGradients4), ref(testCase), ref(data1),
+		thread t4 = thread(calcGradientParts, ref(holdAccumGradients4), ref(testCase), ref(data1),
 			ref(holdTempGradients4), testStruct, begin4, end4);
 
 		t1.join();
@@ -146,15 +150,14 @@ int main() {
 // training progressed. I should see if I could get it cheaply as part of the calculation of 
 // the gradient. For example, calculating a cost is not expensive if the layerNodes have
 // already been updated. 
-
 		double tempCost = 0.;
 		for (size_t tSet = 0; tSet < data1.getNumSets()-numToSave; ++tSet) {
 			tempCost+=testStruct.calcCost(data1.getInputNodes(tSet), data1.getOutputNodes(tSet))/double(data1.getNumSets()-numToSave);
 		}
 		costHistory.push_back(tempCost);
 		++lapCounter;
-//		if (lapCounter > 5)gradientCutDown = 10.;
-//		if (lapCounter > 20)gradientCutDown = 5.;
+//		if (lapCounter > 5)gradientCutDown = 20.;
+//		if (lapCounter > 200)gradientCutDown = 10.;
 
 		if (numSinceLastPrint > numBetweenPrints) {
 			numSinceLastPrint = 0;
@@ -162,31 +165,27 @@ int main() {
 		}
 		++numSinceLastPrint;
 	}
-//	cout << "\nFinal structure " << endl;
-//	for (size_t iCnt = 0; iCnt < testStruct.getNumWeightsMatrices(); ++iCnt) {
-//		cout << "\n Layer " << iCnt << endl;
-//		testStruct.displayWeights(iCnt);
-//	}
 
 	cout << "\nCost history";
 	cout << costHistory;
 //Write the weights structure to file
-	testStruct.writeToFile("./states/weightsFile9.txt");
+	testStruct.writeToFile(outFile);
 // You should now have a trained network. Try it on some cases.
 size_t countHits = 0, countMisses = 0;
 
-for (size_t tSet = data1.getNumSets()-numToSave; tSet < data1.getNumSets(); ++tSet) {
-		testStruct.updateLayers(data1.getInputNodes(tSet));
+unordered_map<int, int> statTestTotal = { {0,0},{1,0},{2,0},{3,0},{4,0},{5,0},{6,0},{7,0},{8,0},{9,0} };
+unordered_map<int, int> statTestMissed = { {0,0},{1,0},{2,0},{3,0},{4,0},{5,0},{6,0},{7,0},{8,0},{9,0} };
 
-//		cout << "\n simpleTest " << data1.getInputNodes(tSet);
-		cout << "\nsimpleNodes " << data1.getOutputNodes(tSet);
-		cout << "Associated label " << data1.getLabels(tSet)<<endl;
+//for (size_t tSet = data1.getNumSets()-numToSave; tSet < data1.getNumSets(); ++tSet) {
+	for (size_t tSet = 0; tSet < 200; ++tSet) {
+		statTestTotal[data1.getLabels(tSet)]++;
+		testStruct.updateLayers(data1.getInputNodes(tSet));
 
 		testStruct.displayLayerNodes(testStruct.getNumWeightsMatrices());
 
 		double max = -10.;
 		size_t indexToKeep = 0;
-		for (size_t iCnt = 0; iCnt < data1.getOutputDimension();++iCnt) {
+		for (size_t iCnt = 0; iCnt < data1.getOutputDimension()-1;++iCnt) {
 //Find the largest
 			if (testStruct.getLayerNodes(testStruct.getNumWeightsMatrices())[iCnt] > max) {
 				max = testStruct.getLayerNodes(testStruct.getNumWeightsMatrices())[iCnt];
@@ -202,9 +201,13 @@ for (size_t tSet = data1.getNumSets()-numToSave; tSet < data1.getNumSets(); ++tS
 		{
 			++countMisses;
 			data1.displayImage(tSet);
+			statTestMissed[data1.getLabels(tSet)]++;
 		}
 	}
 	cout << "\nNumber of hits == " << countHits << " Number of misses = " << countMisses;
+	for (size_t iCnt = 0; iCnt < 10; ++iCnt) {
+		cout<<"\ncount " << iCnt << " total " << statTestTotal[iCnt]<<" ane missed "<<statTestMissed[iCnt];
+	}
 
 	return 0;
 }

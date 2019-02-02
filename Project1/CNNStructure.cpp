@@ -68,6 +68,7 @@ CNNStructure::CNNStructure(const string& inFile) {
 }
 
 void CNNStructure::addLayers(const vector<int>& structure) {
+	//Create space for the layer nodes.
 	for (int layerCount = 0; layerCount < structure.size(); ++layerCount) {
 		vector<double> tempVec;
 		for (int colCount = 0; colCount < structure[layerCount] - 1; ++colCount) {
@@ -205,20 +206,18 @@ void CNNStructure::makeGradPass(CNNStructure& tempGradStruct,const vector<double
 				partRelu[rowCount] * pCpA[rowCount];
 		}
 
-//		if (layerCount > 1) {
-			vector<double> temppCpA;
-			//Calculate the pCpA vector for the next round.
-			for (size_t colCount = 0; colCount < weights[layerCount - 1][0].size()-1; ++colCount) {
-				double tempSum = 0.;
-				for (size_t rowCount = 0; rowCount < weights[layerCount - 1].size() - 1; ++rowCount) {
-					tempSum += weights[layerCount - 1][rowCount][colCount]*partRelu[rowCount]*pCpA[rowCount];
-				}	
-				temppCpA.push_back(tempSum);
-			}
-			pCpA.clear();
-			pCpA =temppCpA;
+		vector<double> temppCpA;
+		//Calculate the pCpA vector for the next round.
+		for (size_t colCount = 0; colCount < weights[layerCount - 1][0].size()-1; ++colCount) {
+			double tempSum = 0.;
+			for (size_t rowCount = 0; rowCount < weights[layerCount - 1].size() - 1; ++rowCount) {
+				tempSum += weights[layerCount - 1][rowCount][colCount]*partRelu[rowCount]*pCpA[rowCount];
+			}	
+			temppCpA.push_back(tempSum);
 		}
-//	}
+		pCpA.clear();
+		pCpA =temppCpA;
+	}
 }
 
 void CNNStructure::writeToFile(const string& outFileName) {
@@ -253,7 +252,7 @@ vector<int> CNNStructure::readFromFile(const string& inFileName) {
 		string line; getline(inFile, line);
 		istringstream in(line);
 		vector<int> structure = vector<int>(istream_iterator<double>(in), istream_iterator<double>());
-		for (size_t matrixCount = 0; matrixCount < structure.size(); ++matrixCount) {
+		for (size_t matrixCount = 0; matrixCount < structure.size()-1; ++matrixCount) {
 			vector<vector<double>>tempMat;
 			for (size_t rowCount = 0; rowCount < structure[matrixCount + 1]; ++rowCount) {
 				getline(inFile, line);
@@ -293,3 +292,14 @@ vector<int> CNNStructure::readFromFile(const string& inFileName) {
 
 }
 
+void CNNStructure::setToZeros() {
+
+	for (size_t layerCount = 0; layerCount < this->weights.size(); ++layerCount) {
+		vector<double> vecTemp(this->weights[layerCount][0].size(),0);
+		for (size_t rowCount = 0; rowCount < this->weights[layerCount].size(); ++rowCount) {
+			this->weights[layerCount][rowCount] = vecTemp;
+		}
+
+	}
+
+}

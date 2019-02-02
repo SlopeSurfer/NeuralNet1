@@ -27,6 +27,7 @@ public:
 	void makeGradPass(CNNStructure& tempGradStruct, const vector<double>& desired);
 	void writeToFile(const string& fileName);
 	vector<int> readFromFile(const string& inFileName);
+	void setToZeros();
 
 };
 

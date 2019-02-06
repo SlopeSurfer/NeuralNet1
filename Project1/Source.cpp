@@ -10,6 +10,7 @@
 #include "dataSet.h"
 #include "handNumberData.h"
 #include <unordered_map>
+#include "limits.h"
 using namespace std;
 
 void calcGradientParts(CNNStructure& holdAccumGradients,const vector<int>& testCase,handNumberData& data,
@@ -30,7 +31,7 @@ int main() {
 
 //Set up the training data.
 	size_t numToSave;
-	double gradientCutDown = 20.;
+	double gradientCutDown = 40.;
 	size_t lapCounter = 0,numBetweenPrints = 9,numSinceLastPrint = 0;
 	// Set up a test case for the structure
 	vector<int> testCase;
@@ -59,9 +60,11 @@ int main() {
 	cout << "\ndata1.getInputDimension() " << data1.getInputDimension();
 	
 //	CNNStructure testStruct(testCase, .5, 1.);
-	string inFile = "./states/weightsRound2-19.txt";
-	string outFile = "./states/weightsRound2-20.txt";
-	size_t numTrainingLoops = 2000;
+	string inFile = "./states/weightsRound2-24.txt";
+//	string inFile = "./states/testWeights.txt";
+
+	string outFile = "./states/weightsRound2-25.txt";
+	size_t numTrainingLoops = 100;
 	CNNStructure testStruct(inFile);
 
 // CNN. You start with a set of weights and biases. While you can calculate a cost from that, it does
@@ -140,7 +143,7 @@ int main() {
 		holdAccumGradients1 += holdAccumGradients4;
 
 // Divide by the number of entries. You may want to do other things to reduce it as well.
-		holdAccumGradients1.divideScaler(double(-gradientCutDown*data1.getNumSets()-numToSave));
+		holdAccumGradients1.divideScaler(double(-gradientCutDown*(data1.getNumSets()-numToSave)));
 
 // Modify the weights and biases.
 		testStruct += holdAccumGradients1;
@@ -170,7 +173,7 @@ int main() {
 	cout << costHistory;
 //Write the weights structure to file
 	testStruct.writeToFile(outFile);
-// You should now have a trained network. Try it on some cases.
+// Try it on some cases.
 size_t countHits = 0, countMisses = 0;
 
 unordered_map<int, int> statTestTotal = { {0,0},{1,0},{2,0},{3,0},{4,0},{5,0},{6,0},{7,0},{8,0},{9,0} };
@@ -178,12 +181,12 @@ unordered_map<int, int> statTestMissed = { {0,0},{1,0},{2,0},{3,0},{4,0},{5,0},{
 
 //for (size_t tSet = data1.getNumSets()-numToSave; tSet < data1.getNumSets(); ++tSet) {
 	for (size_t tSet = 0; tSet < 200; ++tSet) {
-		statTestTotal[data1.getLabels(tSet)]++;
+		statTestTotal[data1.getLabel(tSet)]++;
 		testStruct.updateLayers(data1.getInputNodes(tSet));
 
 		testStruct.displayLayerNodes(testStruct.getNumWeightsMatrices());
 
-		double max = -10.;
+		double max = -DBL_MAX;
 		size_t indexToKeep = 0;
 		for (size_t iCnt = 0; iCnt < data1.getOutputDimension()-1;++iCnt) {
 //Find the largest
@@ -192,16 +195,15 @@ unordered_map<int, int> statTestMissed = { {0,0},{1,0},{2,0},{3,0},{4,0},{5,0},{
 				indexToKeep = iCnt;
 			}
 		}
-		cout << "indexToKeep " << indexToKeep << " label " << data1.getLabels(tSet)<<"\n\n";
-		if (indexToKeep == data1.getLabels(tSet)) {
-
+		cout << "Chosen index " << indexToKeep << " label " << data1.getLabel(tSet)<<"\n\n";
+		if (indexToKeep == data1.getLabel(tSet)) {
 			++countHits;
 		}
 		else
 		{
 			++countMisses;
 			data1.displayImage(tSet);
-			statTestMissed[data1.getLabels(tSet)]++;
+			statTestMissed[data1.getLabel(tSet)]++;
 		}
 	}
 	cout << "\nNumber of hits == " << countHits << " Number of misses = " << countMisses;

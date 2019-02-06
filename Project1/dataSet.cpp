@@ -54,7 +54,7 @@ vector<double> dataSet::getInputNodes(size_t choice) {
 	return inputNodes[choice];
 }
 
-int dataSet::getLabels(size_t choice) {
+int dataSet::getLabel(size_t choice) {
 	assert(choice >= 0 && choice < labels.size());
 	return labels[choice];
 }

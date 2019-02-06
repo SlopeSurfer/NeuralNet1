@@ -22,8 +22,10 @@ CNNStructure::CNNStructure(const vector<int>& structure, double w, double b)
 	//Initialize the weights and biases matrices. Initialize the size of layerNodes at the same time.
 	for (int layerCount= 0; layerCount < structure.size()-1; ++layerCount) {
 		vector<vector<double>> tRows;
+		tRows.reserve(structure[layerCount + 1] - 1);
 		for (int rowCount = 0; rowCount < structure[layerCount+1]-1; ++rowCount) {
 			vector<double> tCols;
+			tCols.reserve(structure[layerCount]);
 			for (int colCount = 0; colCount < structure[layerCount]; ++colCount) {
 				if (colCount != structure[layerCount]) {
 					if (w != 0.) {
@@ -49,6 +51,7 @@ CNNStructure::CNNStructure(const vector<int>& structure, double w, double b)
 			tRows.push_back(tCols);
 		} 
 vector<double> tCols;
+tCols.reserve(structure[layerCount] - 1);
 //Add the row of 0s ending in 1.
 		for (size_t iCnt = 0; iCnt < structure[layerCount]-1; ++iCnt) {
 			tCols.push_back(0.);
@@ -62,15 +65,16 @@ vector<double> tCols;
 }
 
 CNNStructure::CNNStructure(const string& inFile) {
-	vector<int> source = readFromFile(inFile);
-	cout << "\nSource back from readfile " << source;	
+	vector<int> source = readFromFile(inFile);	
 	addLayers(source);
 }
 
 void CNNStructure::addLayers(const vector<int>& structure) {
 	//Create space for the layer nodes.
+	assert(layerNodes.size() == 0);
 	for (int layerCount = 0; layerCount < structure.size(); ++layerCount) {
 		vector<double> tempVec;
+		tempVec.reserve(structure[layerCount]);
 		for (int colCount = 0; colCount < structure[layerCount] - 1; ++colCount) {
 			tempVec.push_back(0.);
 		}
@@ -153,13 +157,12 @@ void CNNStructure::updateLayers(const vector<double>& input) {
 		for (int iCnt = 0; iCnt < tempVec.size(); ++iCnt) {
 
 			if (tempVec[iCnt] < 0.) {
-				tempVec[iCnt] = 0.;			//Comment it to Kill it till you understand it.
+				tempVec[iCnt] = 0.;			//Comment it if you want to kill sigma.
 			}
 		}
 		layerNodes[layerCount+1] = tempVec;
 		tempLayer = tempVec;	
 	}
-
 }
 
 void CNNStructure::divideScaler(const double& factor) {
@@ -176,7 +179,7 @@ void CNNStructure::divideScaler(const double& factor) {
 void CNNStructure::makeGradPass(CNNStructure& tempGradStruct,const vector<double>& desired) {
 // The goal here is to create the gradient for the single test case. 
 // There are multiple terms that need to be multiplied
-// together to form each element. I believe that I need to complete a layer (from back to front) 
+// together to form each element. Complete a layer (from back to front) 
 // before proceding to the next layer. The reason is that you need the results of layer L
 // inorder to get a cost for L-1.
 	vector<double> pCpA;
@@ -195,7 +198,6 @@ void CNNStructure::makeGradPass(CNNStructure& tempGradStruct,const vector<double
 				partRelu[rowCount] = 1.;
 			}
 //			partRelu[rowCount] = 1.;	//uncomment here and comment above to Kill sigma till you understand it.
-//			cout<<"\nweights[layerCount - 1][0].size() " << weights[layerCount - 1][0].size();
 			for (size_t colCount = 0; colCount < weights[layerCount - 1][0].size()-1; ++colCount) {
 //(partial z wrt w)*partial relu*pCpA
 				tempGradStruct.weights[layerCount - 1][rowCount][colCount] =
@@ -205,28 +207,28 @@ void CNNStructure::makeGradPass(CNNStructure& tempGradStruct,const vector<double
 			tempGradStruct.weights[layerCount - 1][rowCount][weights[layerCount - 1][0].size()-1] =
 				partRelu[rowCount] * pCpA[rowCount];
 		}
-
-		vector<double> temppCpA;
-		//Calculate the pCpA vector for the next round.
-		for (size_t colCount = 0; colCount < weights[layerCount - 1][0].size()-1; ++colCount) {
-			double tempSum = 0.;
-			for (size_t rowCount = 0; rowCount < weights[layerCount - 1].size() - 1; ++rowCount) {
-				tempSum += weights[layerCount - 1][rowCount][colCount]*partRelu[rowCount]*pCpA[rowCount];
-			}	
-			temppCpA.push_back(tempSum);
+		if (layerCount > 1) {
+			vector<double> temppCpA;
+			temppCpA.reserve(weights[layerCount - 1][0].size() - 1);
+			//Calculate the pCpA vector for the next round.
+			for (size_t colCount = 0; colCount < weights[layerCount - 1][0].size() - 1; ++colCount) {
+				double tempSum = 0.;
+				for (size_t rowCount = 0; rowCount < weights[layerCount - 1].size() - 1; ++rowCount) {
+					tempSum += weights[layerCount - 1][rowCount][colCount] * partRelu[rowCount] * pCpA[rowCount];
+				}
+				temppCpA.push_back(tempSum);
+			}
+			pCpA.clear();
+			pCpA = temppCpA;
 		}
-		pCpA.clear();
-		pCpA =temppCpA;
 	}
 }
 
 void CNNStructure::writeToFile(const string& outFileName) {
 	ofstream outFile(outFileName);
-//The header will be the number of layers, and then the size of each set of nodes
-//corresponding to each layer.
+//The header is the size of each set of nodes corresponding to each layer.
 
 	if (outFile.is_open()) {
-//		outFile << weights.size();
 		outFile << " "<<weights[0][0].size();
 		for (size_t iCnt = 0; iCnt < weights.size(); ++iCnt) {
 			outFile <<" "<< weights[iCnt].size();
@@ -249,7 +251,8 @@ vector<int> CNNStructure::readFromFile(const string& inFileName) {
 	if (inFile.is_open()) {
 //Get the first line and fill the structure vector.
 		weights.clear();
-		string line; getline(inFile, line);
+		string line; 
+		getline(inFile, line);
 		istringstream in(line);
 		vector<int> structure = vector<int>(istream_iterator<double>(in), istream_iterator<double>());
 		for (size_t matrixCount = 0; matrixCount < structure.size()-1; ++matrixCount) {
@@ -267,19 +270,17 @@ vector<int> CNNStructure::readFromFile(const string& inFileName) {
 					tempMat.push_back(tempVec);
 				}
 				else{
-//The above let's some empty lines slip through. Ignore them and don't let them count toward you rows. 
+//The above might let some empty lines slip through. Ignore them and don't let them count toward your rows. 
 //					cout << "\nEmpty string ignored\n";
 					--rowCount;
 				}
 			}
 			if (!tempMat.empty()) {
-//				cout << "Got Here";
 				weights.push_back(tempMat);
 			}
 		}
 
 		inFile.close();
-		cout << "\nReturning structure from read " << structure;
 		return(structure);
 	}
 	else
@@ -289,7 +290,6 @@ vector<int> CNNStructure::readFromFile(const string& inFileName) {
 		temp.push_back(-1);
 		return(temp);
 	}
-
 }
 
 void CNNStructure::setToZeros() {

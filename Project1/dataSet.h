@@ -19,7 +19,7 @@ public:
 	size_t getInputDimension();
 	size_t getOutputDimension();
 	vector<double> getInputNodes(size_t choice);
-	int getLabels(size_t choice);	//Rename this to getLabel
+	int getLabel(size_t choice);	//Rename this to getLabel
 	vector<double> getOutputNodes(size_t choice);	
 	virtual void displayImage(const size_t& choice) {};
 

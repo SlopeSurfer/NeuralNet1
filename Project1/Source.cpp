@@ -26,9 +26,6 @@ void calcGradientParts(CNNStructure& holdAccumGradients,const vector<int> testCa
 
 		// Add the temp to the accumulator
 		holdAccumGradients += holdTempGradients;
-
-
-
 	}
 	cost = tempCost / double(data.getNumSets());
 }
@@ -37,13 +34,13 @@ int main() {
 
 //Set up the training data.
 	cout << "\nHardware concurrency "<<std::thread::hardware_concurrency();
-	double gradientCutDown = 40.;
+	double gradientCutDown = 200.;
 	size_t lapCounter = 0,numBetweenPrints = 9,numSinceLastPrint = 0;
 	// Set up a test case for the structure
 	vector<int> testCase;
 
-	string fileNameLabels = "./data/train-labels.idx1-ubyte";
-	string fileNameImages = "./data/train-images.idx3-ubyte";
+	string fileNameLabels = "./data/t10k-labels.idx1-ubyte";
+	string fileNameImages = "./data/t10k-images.idx3-ubyte";
 
 	handNumberData data1(fileNameImages, fileNameLabels);
 	data1.displayImage(5);
@@ -65,10 +62,10 @@ int main() {
 	cout << "\ndata1.getInputDimension() " << data1.getInputDimension();
 	
 //	CNNStructure testStruct(testCase, .5, 1.);
-	string inFile = "./states/weightsRound2-25.txt";
+	string inFile = "./states/weightsFile9.txt";
 //	string inFile = "./states/testWeights.txt";
 
-	string outFile = "./states/weightsFile26.txtt";
+	string outFile = "./states/weightsFile10.txt";
 	size_t numTrainingLoops = 100;
 	CNNStructure testStruct(inFile);
 
@@ -96,6 +93,7 @@ costHistory.reserve(numTrainingLoops);
 
 //Start training
 	size_t numThreads = std::thread::hardware_concurrency();
+	if (numThreads < 2)numThreads = 2;		//Not a likely enough senario to change the threading paradigm.
 	vector<size_t> begin(numThreads), end(numThreads);
 
 //Create separate holdTempGradients(testCase) and holdAccumGradients(testCase) for each thread.
@@ -151,7 +149,6 @@ costHistory.reserve(numTrainingLoops);
 
 		if (numSinceLastPrint > numBetweenPrints) {
 
-			costHistory.push_back(tempCost);
 			cout << "\ncost " << costFromGradCalc[0];
 
 			numSinceLastPrint = 0;

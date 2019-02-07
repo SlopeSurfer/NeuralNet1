@@ -16,6 +16,7 @@ using namespace std;
 
 void calcGradientParts(CNNStructure& holdAccumGradients,const vector<int> testCase,handNumberData& data,
 						CNNStructure& holdTempGradients,CNNStructure testStruct,size_t begin, size_t end) {
+//	cout << "\nInside calcGrad...";
 	holdAccumGradients.setToZeros();	//Zero this out because of the += later.
 	for (size_t tSet = begin; tSet < end; ++tSet) {
 		testStruct.updateLayers(data.getInputNodes(tSet));
@@ -38,8 +39,8 @@ int main() {
 	// Set up a test case for the structure
 	vector<int> testCase;
 
-	string fileNameLabels = "./data/train-labels.idx1-ubyte";
-	string fileNameImages = "./data/train-images.idx3-ubyte";
+	string fileNameLabels = "./data/t10k-labels.idx1-ubyte";
+	string fileNameImages = "./data/t10k-images.idx3-ubyte";
 
 	handNumberData data1(fileNameImages, fileNameLabels);
 	data1.displayImage(5);
@@ -62,11 +63,11 @@ int main() {
 	cout << "\ndata1.getInputDimension() " << data1.getInputDimension();
 	
 //	CNNStructure testStruct(testCase, .5, 1.);
-	string inFile = "./states/weightsRound2-24.txt";
+	string inFile = "./states/weightsFile9.txt";
 //	string inFile = "./states/testWeights.txt";
 
-	string outFile = "./states/weightsRound2-25.txt";
-	size_t numTrainingLoops = 6000;
+	string outFile = "./states/weightsFile10.txtt";
+	size_t numTrainingLoops = 1000;
 	CNNStructure testStruct(inFile);
 
 // CNN. You start with a set of weights and biases. While you can calculate a cost from that, it does
@@ -105,11 +106,11 @@ auto beginCheck = chrono::high_resolution_clock::now();
 
 	size_t totalSets = data1.getNumSets() - numToSave;
 	size_t numForEachSplit = totalSets / numThreads;
-	begin[0] = 0;
-	end[0] = numForEachSplit;
+	begin.push_back(0);
+	end.push_back(numForEachSplit);
 	for (size_t iCnt = 1; iCnt < numThreads; ++iCnt) {
-		begin[iCnt] = end[iCnt-1];
-		end[iCnt] = begin[iCnt]+numForEachSplit;
+		begin.push_back(end[iCnt-1]);
+		end.push_back(begin[iCnt]+numForEachSplit);
 	}
 	for (size_t iCnt = 0; iCnt < numThreads; ++iCnt) {
 		cout << "\nBegin and end " << begin[iCnt] << " " << end[iCnt];
@@ -124,6 +125,7 @@ auto beginCheck = chrono::high_resolution_clock::now();
 //up, beause each thread would have its own copy. One possibility would be that by passing by
 //reference, when one of the threads updates the layer nodes (note, the weights are not changed),
 //it could change what another thread sees since they would all be sharing the same referenece.
+
 		for (size_t tC = 0; tC < numThreads; ++tC) {
 			t[tC] = thread(calcGradientParts, ref(holdAccumGradients[tC]), testCase, ref(data1),
 				ref(holdTempGradients[tC]), testStruct, begin[tC], end[tC]);

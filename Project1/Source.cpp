@@ -11,9 +11,10 @@
 #include "handNumberData.h"
 #include <unordered_map>
 #include "limits.h"
+#include "time.h"
 using namespace std;
 
-void calcGradientParts(CNNStructure& holdAccumGradients,const vector<int>& testCase,handNumberData& data,
+void calcGradientParts(CNNStructure& holdAccumGradients,const vector<int> testCase,handNumberData& data,
 						CNNStructure& holdTempGradients,CNNStructure testStruct,size_t begin, size_t end) {
 	holdAccumGradients.setToZeros();	//Zero this out because of the += later.
 	for (size_t tSet = begin; tSet < end; ++tSet) {
@@ -30,6 +31,7 @@ void calcGradientParts(CNNStructure& holdAccumGradients,const vector<int>& testC
 int main() {
 
 //Set up the training data.
+	cout << "\nHardware concurrency "<<std::thread::hardware_concurrency();
 	size_t numToSave;
 	double gradientCutDown = 40.;
 	size_t lapCounter = 0,numBetweenPrints = 9,numSinceLastPrint = 0;
@@ -64,7 +66,7 @@ int main() {
 //	string inFile = "./states/testWeights.txt";
 
 	string outFile = "./states/weightsRound2-25.txt";
-	size_t numTrainingLoops = 100;
+	size_t numTrainingLoops = 6000;
 	CNNStructure testStruct(inFile);
 
 // CNN. You start with a set of weights and biases. While you can calculate a cost from that, it does
@@ -79,74 +81,66 @@ int main() {
 // in with the rest. 
 // Loop over the training set.
 
-#ifdef _DEBUG
-
-	cout << "\nShow the matricies " << endl;
-	for (size_t iCnt = 0; iCnt < testStruct.getNumWeightsMatrices(); ++iCnt) {
-		cout << "\n Layer " << iCnt << endl;
-		testStruct.displayWeights(iCnt);
-	}
-
-	cout << "\nShow the default layerNodes" << endl;
-	for (size_t iCnt = 0; iCnt < testStruct.getNumWeightsMatrices() + 1; ++iCnt) {
-		cout << "\n Layer " << iCnt << endl;
-		testStruct.displayLayerNodes(iCnt);
-	}
-#endif // !_DEBUG
-
-	vector<double> costHistory;
+vector<double> costHistory;
+costHistory.reserve(numTrainingLoops);
 //Get the starting cost.
+auto beginCheck = chrono::high_resolution_clock::now();
 	double tempCost = 0.;
-
 	for (size_t tSet = 0; tSet < data1.getNumSets()-numToSave; ++tSet) {
 		tempCost += testStruct.calcCost(data1.getInputNodes(tSet), data1.getOutputNodes(tSet)) / double(data1.getNumSets()-numToSave); 
 	}
+	auto endCheck = chrono::high_resolution_clock::now();
+	cout << "\nTime to check cost " << chrono::duration<double, std::milli>(endCheck - beginCheck).count();
 	cout << "\nStarting cost "<<tempCost;
 	costHistory.push_back(tempCost);
 
 //Start training
-//	size_t numTrainingLoops = 4000;
+	size_t numThreads = std::thread::hardware_concurrency();
+	vector<size_t> begin, end;
+	begin.reserve(numThreads);
+	end.reserve(numThreads);
+//Create separate holdTempGradients(testCase) and holdAccumGradients(testCase) for each thread.
+	vector<CNNStructure> holdAccumGradients(numThreads,CNNStructure(testCase));
+	vector<CNNStructure> holdTempGradients(numThreads, CNNStructure(testCase));
 
-//I will need a separate holdTempGradients(testCase) and holdAccumGradients for each thread.
-	CNNStructure holdAccumGradients1(testCase);
-	CNNStructure holdAccumGradients2(testCase);
-	CNNStructure holdAccumGradients3(testCase);
-	CNNStructure holdAccumGradients4(testCase);
-	CNNStructure holdTempGradients1(testCase); //Each member will get set with no depedence on previous.
-	CNNStructure holdTempGradients2(testCase); //Each member will get set with no depedence on previous.
-	CNNStructure holdTempGradients3(testCase); //Each member will get set with no depedence on previous.
-	CNNStructure holdTempGradients4(testCase); //Each member will get set with no depedence on previous.
 	size_t totalSets = data1.getNumSets() - numToSave;
-	size_t numForEachSplit = totalSets / 4;
-	size_t begin1 = 0, end1 = numForEachSplit;
-	size_t begin2 = end1 + 1, end2 = end1 + numForEachSplit;
-	size_t begin3 = end2 + 1, end3 = end2 + numForEachSplit;
-	size_t begin4 = end3 + 1, end4 = end3 + numForEachSplit;
+	size_t numForEachSplit = totalSets / numThreads;
+	begin[0] = 0;
+	end[0] = numForEachSplit;
+	for (size_t iCnt = 1; iCnt < numThreads; ++iCnt) {
+		begin[iCnt] = end[iCnt-1];
+		end[iCnt] = begin[iCnt]+numForEachSplit;
+	}
+	for (size_t iCnt = 0; iCnt < numThreads; ++iCnt) {
+		cout << "\nBegin and end " << begin[iCnt] << " " << end[iCnt];
+	}
+	vector<thread> t;
+	t.reserve(numThreads);
 	for (size_t trainLoops = 0; trainLoops < numTrainingLoops; ++trainLoops) {
+		auto beginLoopTime = chrono::high_resolution_clock::now();
 
-		thread t1 = thread(calcGradientParts, ref(holdAccumGradients1), ref(testCase), ref(data1), 
-			ref(holdTempGradients1), testStruct, begin1, end1);
-		thread t2 = thread(calcGradientParts, ref(holdAccumGradients2), ref(testCase), ref(data1),
-			ref(holdTempGradients2), testStruct, begin2, end2);
-		thread t3 = thread(calcGradientParts, ref(holdAccumGradients3), ref(testCase), ref(data1),
-			ref(holdTempGradients3), testStruct, begin3, end3);
-		thread t4 = thread(calcGradientParts, ref(holdAccumGradients4), ref(testCase), ref(data1),
-			ref(holdTempGradients4), testStruct, begin4, end4);
+//In the following, if I send the testStruct as a reference, I get a different answer for the 
+//cost downstream. I can see where sending by value might speed things
+//up, beause each thread would have its own copy. One possibility would be that by passing by
+//reference, when one of the threads updates the layer nodes (note, the weights are not changed),
+//it could change what another thread sees since they would all be sharing the same referenece.
+		for (size_t tC = 0; tC < numThreads; ++tC) {
+			t[tC] = thread(calcGradientParts, ref(holdAccumGradients[tC]), testCase, ref(data1),
+				ref(holdTempGradients[tC]), testStruct, begin[tC], end[tC]);
+		}
+		for (size_t tC = 0; tC < numThreads; ++tC) {
+			t[tC].join();
+		}
 
-		t1.join();
-		t2.join();
-		t3.join();
-		t4.join();
-
-		holdAccumGradients1 += holdAccumGradients2;
-		holdAccumGradients1 += holdAccumGradients3;
-		holdAccumGradients1 += holdAccumGradients4;
+		for (size_t tC = 1; tC < numThreads; ++tC) {
+			holdAccumGradients[0] += holdAccumGradients[tC];
+		}
 
 // Divide by the number of entries. You may want to do other things to reduce it as well.
-		holdAccumGradients1.divideScaler(double(-gradientCutDown*(data1.getNumSets()-numToSave)));
+		holdAccumGradients[0].divideScaler(double(-gradientCutDown*(data1.getNumSets()-numToSave)));
 
 // Modify the weights and biases.
-		testStruct += holdAccumGradients1;
+		testStruct += holdAccumGradients[0];
 
 // Calculate and store the new cost.To do this, sum up the cost across the entire data set. 
 // Note, this is not really required for the training. It is so I can get a look at how the
@@ -164,7 +158,10 @@ int main() {
 
 		if (numSinceLastPrint > numBetweenPrints) {
 			numSinceLastPrint = 0;
-			cout << "[" << lapCounter << "] " << tempCost;
+			auto endLoopTime = chrono::high_resolution_clock::now();
+			cout << " [" << lapCounter << "] cost " << tempCost<<" Time "<<
+				chrono::duration<double, std::milli>(endLoopTime - beginLoopTime).count();
+
 		}
 		++numSinceLastPrint;
 	}
@@ -207,8 +204,8 @@ unordered_map<int, int> statTestMissed = { {0,0},{1,0},{2,0},{3,0},{4,0},{5,0},{
 		}
 	}
 	cout << "\nNumber of hits == " << countHits << " Number of misses = " << countMisses;
-	for (size_t iCnt = 0; iCnt < 10; ++iCnt) {
-		cout<<"\ncount " << iCnt << " total " << statTestTotal[iCnt]<<" ane missed "<<statTestMissed[iCnt];
+	for (unsigned int iCnt = 0; iCnt < 10; ++iCnt) {
+		cout<<"\ncount " << iCnt << " total " << statTestTotal[iCnt]<<" and missed "<<statTestMissed[iCnt];
 	}
 
 	return 0;

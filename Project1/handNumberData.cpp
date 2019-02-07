@@ -5,7 +5,6 @@
 handNumberData::handNumberData(const string& imageDataName, const string& labelDataName)
 {
 	imagesAndLabels* myImagesAndLabels = new imagesAndLabels(imageDataName, labelDataName);
-	myImagesAndLabels->displayImage(5);
 	numCols = myImagesAndLabels->getNumCols();
 
 //Fill the dataSet.
@@ -66,7 +65,6 @@ void handNumberData::displayImage(const size_t& imageToCheck) {
 			{
 				cout << " " << 0;
 			}
-			//				cout << " " << testImages.getPixel(imageToCheck, iCnt, jCnt);
 		}
 	}
 }

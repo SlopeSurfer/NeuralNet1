@@ -16,7 +16,6 @@ class imagesAndLabels
 	int numRows, numCols;
 public:
 	imagesAndLabels(string fileNameImages, string fileNameLabels);
-	~imagesAndLabels();
 	void displayImage(int imageNum);
 	size_t getPixel(int imageNumber, int row, int col);
 	size_t getLabel(int imageNumber);

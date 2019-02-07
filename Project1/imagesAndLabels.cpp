@@ -20,17 +20,19 @@ imagesAndLabels::imagesAndLabels(string fileNameImages, string fileNameLabels)
 		int magicNumber = 0;
 		fileImages.read((char*)&magicNumber, sizeof(magicNumber));
 		magicNumber = ReverseInt(magicNumber);
-//		cout << "\n\nImages data ";
-//		cout << "\nMagic number " << magicNumber;
 		fileImages.read((char*)&numImages, sizeof(numImages));
 		numImages = ReverseInt(numImages);
-//		cout << "\nNumber of images " << numImages;
 		fileImages.read((char*)&numRows, sizeof(numRows));
 		numRows = ReverseInt(numRows);
-//		cout << "\nNumber of rows " << numRows;
 		fileImages.read((char*)&numCols, sizeof(numCols));
 		numCols = ReverseInt(numCols);
-//		cout << "\nNumber of columns " << numCols;
+#ifdef _DEBUG
+		cout << "\n\nImages data ";
+		cout << "\nMagic number " << magicNumber;
+		cout << "\nNumber of rows " << numRows;
+		cout << "\nNumber of columns " << numCols;
+		cout << "\nNumber of images " << numImages;
+#endif
 		for (int i = 0; i < numImages; ++i)
 		{
 			vector<vector<double>> tp;
@@ -60,14 +62,16 @@ imagesAndLabels::imagesAndLabels(string fileNameImages, string fileNameLabels)
 		int numLabels = 0;
 		fileLabels.read((char*)&magicNumber, sizeof(magicNumber));
 		magicNumber = ReverseInt(magicNumber);
-//		cout << "\n\nLabels data ";
-//		cout << "\nMagic number " << magicNumber;
+
 		fileLabels.read((char*)&numLabels, sizeof(numLabels));
 		numLabels = ReverseInt(numLabels);
 
 		assert(numLabels == numImages);
-
-//		cout << "\nNumber labels " << numLabels;
+#ifdef _DEBUG
+		cout << "\n\nLabels data ";
+		cout << "\nMagic number " << magicNumber;
+		cout << "\nNumber labels " << numLabels;
+#endif
 		for (int i = 0; i < numLabels; ++i)
 		{
 			unsigned char temp = 0;
@@ -83,11 +87,6 @@ imagesAndLabels::imagesAndLabels(string fileNameImages, string fileNameLabels)
 	}
 }
 
-
-imagesAndLabels::~imagesAndLabels()
-{
-}
-
 void imagesAndLabels::displayImage(int imageToCheck){
 	assert(imageToCheck > 0 && imageToCheck <= numImages);
 	cout << "\nLabel at " << imageToCheck << " = " << labels[imageToCheck];
@@ -101,7 +100,6 @@ void imagesAndLabels::displayImage(int imageToCheck){
 			{
 				cout << " " << 0;
 			}
-			//				cout << " " << testImages.getPixel(imageToCheck, iCnt, jCnt);
 		}
 	}
 }

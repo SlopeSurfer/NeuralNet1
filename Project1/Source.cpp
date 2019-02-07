@@ -11,36 +11,39 @@
 #include "handNumberData.h"
 #include <unordered_map>
 #include "limits.h"
-#include "time.h"
+#include <chrono>
 using namespace std;
 
 void calcGradientParts(CNNStructure& holdAccumGradients,const vector<int> testCase,handNumberData& data,
-						CNNStructure& holdTempGradients,CNNStructure testStruct,size_t begin, size_t end) {
-//	cout << "\nInside calcGrad...";
+						CNNStructure& holdTempGradients,CNNStructure testStruct,size_t begin, size_t end, double& cost) {
 	holdAccumGradients.setToZeros();	//Zero this out because of the += later.
+	double tempCost = 0;
 	for (size_t tSet = begin; tSet < end; ++tSet) {
 		testStruct.updateLayers(data.getInputNodes(tSet));
-
+		tempCost += testStruct.calcCost(data.getInputNodes(tSet), data.getOutputNodes(tSet), false);
 		// Fill holdTempGradients for this test set. 
 		testStruct.makeGradPass(holdTempGradients, data.getOutputNodes(tSet));
 
 		// Add the temp to the accumulator
 		holdAccumGradients += holdTempGradients;
+
+
+
 	}
+	cost = tempCost / double(data.getNumSets());
 }
 
 int main() {
 
 //Set up the training data.
 	cout << "\nHardware concurrency "<<std::thread::hardware_concurrency();
-	size_t numToSave;
 	double gradientCutDown = 40.;
 	size_t lapCounter = 0,numBetweenPrints = 9,numSinceLastPrint = 0;
 	// Set up a test case for the structure
 	vector<int> testCase;
 
-	string fileNameLabels = "./data/t10k-labels.idx1-ubyte";
-	string fileNameImages = "./data/t10k-images.idx3-ubyte";
+	string fileNameLabels = "./data/train-labels.idx1-ubyte";
+	string fileNameImages = "./data/train-images.idx3-ubyte";
 
 	handNumberData data1(fileNameImages, fileNameLabels);
 	data1.displayImage(5);
@@ -49,7 +52,6 @@ int main() {
 	testCase.push_back(16);
 	testCase.push_back((int)data1.getOutputDimension() );
 
-	numToSave = 0;
 /*
 	dataSet data1(80), data2(40);
 	
@@ -57,17 +59,17 @@ int main() {
 	testCase.push_back(3);
 	testCase.push_back(3);
 	testCase.push_back((int)data1.getOutputDimension());
-	numToSave = 40;
+
 */	
 	cout << "\ndata1.getOutputDimension() " << data1.getOutputDimension();
 	cout << "\ndata1.getInputDimension() " << data1.getInputDimension();
 	
 //	CNNStructure testStruct(testCase, .5, 1.);
-	string inFile = "./states/weightsFile9.txt";
+	string inFile = "./states/weightsRound2-25.txt";
 //	string inFile = "./states/testWeights.txt";
 
-	string outFile = "./states/weightsFile10.txtt";
-	size_t numTrainingLoops = 1000;
+	string outFile = "./states/weightsFile26.txtt";
+	size_t numTrainingLoops = 100;
 	CNNStructure testStruct(inFile);
 
 // CNN. You start with a set of weights and biases. While you can calculate a cost from that, it does
@@ -85,40 +87,36 @@ int main() {
 vector<double> costHistory;
 costHistory.reserve(numTrainingLoops);
 //Get the starting cost.
-auto beginCheck = chrono::high_resolution_clock::now();
 	double tempCost = 0.;
-	for (size_t tSet = 0; tSet < data1.getNumSets()-numToSave; ++tSet) {
-		tempCost += testStruct.calcCost(data1.getInputNodes(tSet), data1.getOutputNodes(tSet)) / double(data1.getNumSets()-numToSave); 
+	for (size_t tSet = 0; tSet < data1.getNumSets(); ++tSet) {
+		tempCost += testStruct.calcCost(data1.getInputNodes(tSet), data1.getOutputNodes(tSet)) / double(data1.getNumSets()); 
 	}
-	auto endCheck = chrono::high_resolution_clock::now();
-	cout << "\nTime to check cost " << chrono::duration<double, std::milli>(endCheck - beginCheck).count();
 	cout << "\nStarting cost "<<tempCost;
 	costHistory.push_back(tempCost);
 
 //Start training
 	size_t numThreads = std::thread::hardware_concurrency();
-	vector<size_t> begin, end;
-	begin.reserve(numThreads);
-	end.reserve(numThreads);
+	vector<size_t> begin(numThreads), end(numThreads);
+
 //Create separate holdTempGradients(testCase) and holdAccumGradients(testCase) for each thread.
 	vector<CNNStructure> holdAccumGradients(numThreads,CNNStructure(testCase));
 	vector<CNNStructure> holdTempGradients(numThreads, CNNStructure(testCase));
 
-	size_t totalSets = data1.getNumSets() - numToSave;
+	size_t totalSets = data1.getNumSets();
 	size_t numForEachSplit = totalSets / numThreads;
-	begin.push_back(0);
-	end.push_back(numForEachSplit);
+	begin[0] = 0;
+	end[0] = numForEachSplit;
 	for (size_t iCnt = 1; iCnt < numThreads; ++iCnt) {
-		begin.push_back(end[iCnt-1]);
-		end.push_back(begin[iCnt]+numForEachSplit);
+		begin[iCnt] = end[iCnt-1];
+		end[iCnt] = begin[iCnt]+numForEachSplit;
 	}
 	for (size_t iCnt = 0; iCnt < numThreads; ++iCnt) {
 		cout << "\nBegin and end " << begin[iCnt] << " " << end[iCnt];
 	}
-	vector<thread> t;
-	t.reserve(numThreads);
+	vector<thread> t(numThreads);
+	vector<double> costFromGradCalc(numThreads);
+	auto beginLoopTime = chrono::high_resolution_clock::now();
 	for (size_t trainLoops = 0; trainLoops < numTrainingLoops; ++trainLoops) {
-		auto beginLoopTime = chrono::high_resolution_clock::now();
 
 //In the following, if I send the testStruct as a reference, I get a different answer for the 
 //cost downstream. I can see where sending by value might speed things
@@ -128,7 +126,7 @@ auto beginCheck = chrono::high_resolution_clock::now();
 
 		for (size_t tC = 0; tC < numThreads; ++tC) {
 			t[tC] = thread(calcGradientParts, ref(holdAccumGradients[tC]), testCase, ref(data1),
-				ref(holdTempGradients[tC]), testStruct, begin[tC], end[tC]);
+				ref(holdTempGradients[tC]), testStruct, begin[tC], end[tC],ref(costFromGradCalc[tC]));
 		}
 		for (size_t tC = 0; tC < numThreads; ++tC) {
 			t[tC].join();
@@ -136,33 +134,31 @@ auto beginCheck = chrono::high_resolution_clock::now();
 
 		for (size_t tC = 1; tC < numThreads; ++tC) {
 			holdAccumGradients[0] += holdAccumGradients[tC];
+			costFromGradCalc[0] += costFromGradCalc[tC];
 		}
 
-// Divide by the number of entries. You may want to do other things to reduce it as well.
-		holdAccumGradients[0].divideScaler(double(-gradientCutDown*(data1.getNumSets()-numToSave)));
+// Normalize by dividing by the number of entries. You may want to do other things to reduce it as well.
+		holdAccumGradients[0].divideScaler(double(-gradientCutDown*(data1.getNumSets())));
 
 // Modify the weights and biases.
 		testStruct += holdAccumGradients[0];
 
-// Calculate and store the new cost.To do this, sum up the cost across the entire data set. 
-// Note, this is not really required for the training. It is so I can get a look at how the
-// training progressed. I should see if I could get it cheaply as part of the calculation of 
-// the gradient. For example, calculating a cost is not expensive if the layerNodes have
-// already been updated. 
-		double tempCost = 0.;
-		for (size_t tSet = 0; tSet < data1.getNumSets()-numToSave; ++tSet) {
-			tempCost+=testStruct.calcCost(data1.getInputNodes(tSet), data1.getOutputNodes(tSet))/double(data1.getNumSets()-numToSave);
-		}
-		costHistory.push_back(tempCost);
+		costHistory.push_back(costFromGradCalc[0]);
+
 		++lapCounter;
 //		if (lapCounter > 5)gradientCutDown = 20.;
 //		if (lapCounter > 200)gradientCutDown = 10.;
 
 		if (numSinceLastPrint > numBetweenPrints) {
+
+			costHistory.push_back(tempCost);
+			cout << "\ncost " << costFromGradCalc[0];
+
 			numSinceLastPrint = 0;
 			auto endLoopTime = chrono::high_resolution_clock::now();
-			cout << " [" << lapCounter << "] cost " << tempCost<<" Time "<<
-				chrono::duration<double, std::milli>(endLoopTime - beginLoopTime).count();
+			cout << " [" << lapCounter << "]  Time "<<
+				chrono::duration<double>(endLoopTime - beginLoopTime).count();
+			beginLoopTime = chrono::high_resolution_clock::now();
 
 		}
 		++numSinceLastPrint;
@@ -178,7 +174,7 @@ size_t countHits = 0, countMisses = 0;
 unordered_map<int, int> statTestTotal = { {0,0},{1,0},{2,0},{3,0},{4,0},{5,0},{6,0},{7,0},{8,0},{9,0} };
 unordered_map<int, int> statTestMissed = { {0,0},{1,0},{2,0},{3,0},{4,0},{5,0},{6,0},{7,0},{8,0},{9,0} };
 
-//for (size_t tSet = data1.getNumSets()-numToSave; tSet < data1.getNumSets(); ++tSet) {
+//for (size_t tSet = data1.getNumSets(); tSet < data1.getNumSets(); ++tSet) {
 	for (size_t tSet = 0; tSet < 200; ++tSet) {
 		statTestTotal[data1.getLabel(tSet)]++;
 		testStruct.updateLayers(data1.getInputNodes(tSet));

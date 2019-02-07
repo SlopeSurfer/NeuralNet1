@@ -13,7 +13,7 @@ public:
 	CNNStructure(const string& inFile);
 //	~CNNStructure();
 	void addLayers(const vector<int>& structure);
-	double calcCost(const vector<double>& input, const vector<double>& desired);
+	double calcCost(const vector<double>& input, const vector<double>& desired, const bool updateLayersBool=true);
 	size_t getNumWeightsMatrices();
 	size_t getNumWeightsRows(size_t layerNum);
 	size_t getNumWeightsCols(size_t layerNum);

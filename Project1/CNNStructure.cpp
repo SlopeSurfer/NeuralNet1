@@ -82,15 +82,12 @@ void CNNStructure::addLayers(const vector<int>& structure) {
 		layerNodes.push_back(tempVec);
 	}
 }
-/*
-CNNStructure::~CNNStructure()
-{
-}
-*/
 
-double CNNStructure::calcCost(const vector<double>& input, const vector<double>& desired) {
+double CNNStructure::calcCost(const vector<double>& input, const vector<double>& desired, const bool updateLayersBool) {
 //This version uses the input to update the layers and then calculate the cost.
-	updateLayers(input);
+	if (updateLayersBool) { 
+		updateLayers(input); 
+	}
 //The cost only depends on the last layer's nodes. And there is no addition term added to the vector.
 	double costSum = 0.;
 	size_t numLayers = layerNodes.size();

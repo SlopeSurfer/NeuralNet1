@@ -15,17 +15,14 @@
 using namespace std;
 
 void calcGradientParts(CNNStructure& holdAccumGradients,const vector<int> testCase,handNumberData& data,
-						CNNStructure& holdTempGradients,CNNStructure testStruct,size_t begin, size_t end, double& cost) {
+						CNNStructure testStruct,size_t begin, size_t end, double& cost) {
 	holdAccumGradients.setToZeros();	//Zero this out because of the += later.
 	double tempCost = 0;
 	for (size_t tSet = begin; tSet < end; ++tSet) {
 		testStruct.updateLayers(data.getInputNodes(tSet));
 		tempCost += testStruct.calcCost(data.getInputNodes(tSet), data.getOutputNodes(tSet), false);
-		// Fill holdTempGradients for this test set. 
-		testStruct.makeGradPass(holdTempGradients, data.getOutputNodes(tSet));
-
-		// Add the temp to the accumulator
-		holdAccumGradients += holdTempGradients;
+		// Add to holdAccumGradients for this test set. 
+		testStruct.makeGradPass(holdAccumGradients, data.getOutputNodes(tSet));
 	}
 	cost = tempCost / double(data.getNumSets());
 }
@@ -62,11 +59,11 @@ int main() {
 	cout << "\ndata1.getInputDimension() " << data1.getInputDimension();
 	
 //	CNNStructure testStruct(testCase, .5, 1.);
-	string inFile = "./states/weightsFile9.txt";
+	string inFile = "./states/10kweightsFile12.txt";
 //	string inFile = "./states/testWeights.txt";
 
-	string outFile = "./states/weightsFile10.txt";
-	size_t numTrainingLoops = 100;
+	string outFile = "./states/10kweightsFile13.txt";
+	size_t numTrainingLoops = 30000;
 	CNNStructure testStruct(inFile);
 
 // CNN. You start with a set of weights and biases. While you can calculate a cost from that, it does
@@ -124,7 +121,7 @@ costHistory.reserve(numTrainingLoops);
 
 		for (size_t tC = 0; tC < numThreads; ++tC) {
 			t[tC] = thread(calcGradientParts, ref(holdAccumGradients[tC]), testCase, ref(data1),
-				ref(holdTempGradients[tC]), testStruct, begin[tC], end[tC],ref(costFromGradCalc[tC]));
+				testStruct, begin[tC], end[tC],ref(costFromGradCalc[tC]));
 		}
 		for (size_t tC = 0; tC < numThreads; ++tC) {
 			t[tC].join();

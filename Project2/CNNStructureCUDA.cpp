@@ -1,4 +1,4 @@
-#include "CNNStructure.h"
+#include "CNNStructureCUDA.h"
 #include <assert.h>
 #include <iostream>
 #include <fstream>
@@ -9,21 +9,21 @@
 #include <string>
 using namespace std;
 
-CNNStructure::CNNStructure(const vector<int>& structure, double w, double b)
+CNNStructureCUDA::CNNStructureCUDA(const vector<int>& structure, double w, double b)
 {
 	assert(structure.size() > 1);
-// Treating the biases like translations. I'm also going to assume that
-// multiplication of the nodes by the resulting matrix has the nodes coming in as a column
-// vector on the right side. That implies that for each layer, its matrix will be M rows x N
-//	columns.
-// where M is the number of rows in the resulting layer
-// and N is the number of columns. 
+	// Treating the biases like translations. I'm also going to assume that
+	// multiplication of the nodes by the resulting matrix has the nodes coming in as a column
+	// vector on the right side. That implies that for each layer, its matrix will be M rows x N
+	//	columns.
+	// where M is the number of rows in the resulting layer
+	// and N is the number of columns. 
 
-	//Initialize the weights and biases matrices. Initialize the size of layerNodes at the same time.
-	for (int layerCount= 0; layerCount < structure.size()-1; ++layerCount) {
+		//Initialize the weights and biases matrices. Initialize the size of layerNodes at the same time.
+	for (int layerCount = 0; layerCount < structure.size() - 1; ++layerCount) {
 		vector<vector<double>> tRows;
 		tRows.reserve(structure[layerCount + 1] - 1);
-		for (int rowCount = 0; rowCount < structure[layerCount+1]-1; ++rowCount) {
+		for (int rowCount = 0; rowCount < structure[layerCount + 1] - 1; ++rowCount) {
 			vector<double> tCols;
 			tCols.reserve(structure[layerCount]);
 			for (int colCount = 0; colCount < structure[layerCount]; ++colCount) {
@@ -47,29 +47,29 @@ CNNStructure::CNNStructure(const vector<int>& structure, double w, double b)
 
 					}
 				}
-			}		
+			}
 			tRows.push_back(tCols);
-		} 
-vector<double> tCols;
-tCols.reserve(structure[layerCount] - 1);
-//Add the row of 0s ending in 1.
-		for (size_t iCnt = 0; iCnt < structure[layerCount]-1; ++iCnt) {
+		}
+		vector<double> tCols;
+		tCols.reserve(structure[layerCount] - 1);
+		//Add the row of 0s ending in 1.
+		for (size_t iCnt = 0; iCnt < structure[layerCount] - 1; ++iCnt) {
 			tCols.push_back(0.);
 		}
 		tCols.push_back(1.);
 		tRows.push_back(tCols);
 		weights.push_back(tRows);
 	}
-//Create the layers that go with these matrices.
+	//Create the layers that go with these matrices.
 	addLayers(structure);
 }
 
-CNNStructure::CNNStructure(const string& inFile) {
-	vector<int> source = readFromFile(inFile);	
+CNNStructureCUDA::CNNStructureCUDA(const string& inFile) {
+	vector<int> source = readFromFile(inFile);
 	addLayers(source);
 }
 
-void CNNStructure::addLayers(const vector<int>& structure) {
+void CNNStructureCUDA::addLayers(const vector<int>& structure) {
 	//Create space for the layer nodes.
 	assert(layerNodes.size() == 0);
 	for (int layerCount = 0; layerCount < structure.size(); ++layerCount) {
@@ -83,46 +83,46 @@ void CNNStructure::addLayers(const vector<int>& structure) {
 	}
 }
 
-double CNNStructure::calcCost(const vector<double>& input, const vector<double>& desired, const bool updateLayersBool) {
-//This version uses the input to update the layers and then calculate the cost.
-	if (updateLayersBool) { 
-		updateLayers(input); 
+double CNNStructureCUDA::calcCost(const vector<double>& input, const vector<double>& desired, const bool updateLayersBool) {
+	//This version uses the input to update the layers and then calculate the cost.
+	if (updateLayersBool) {
+		updateLayers(input);
 	}
-//The cost only depends on the last layer's nodes. And there is no addition term added to the vector.
+	//The cost only depends on the last layer's nodes. And there is no addition term added to the vector.
 	double costSum = 0.;
 	size_t numLayers = layerNodes.size();
-	for (int iCnt = 0; iCnt < desired.size()-1; ++iCnt) {	// Cut down by one because desired has the extra 1.
+	for (int iCnt = 0; iCnt < desired.size() - 1; ++iCnt) {	// Cut down by one because desired has the extra 1.
 															// It doesn't really matter since both have 1 at the end.
-		costSum += pow((layerNodes[numLayers-1][iCnt] - desired[iCnt]),2);
+		costSum += pow((layerNodes[numLayers - 1][iCnt] - desired[iCnt]), 2);
 	}
 	return(costSum);
 }
 
-size_t CNNStructure::getNumWeightsMatrices() {
+size_t CNNStructureCUDA::getNumWeightsMatrices() {
 	return(weights.size());
 }
-size_t CNNStructure::getNumWeightsRows(const size_t layerNum) {
+size_t CNNStructureCUDA::getNumWeightsRows(const size_t layerNum) {
 	return(weights[layerNum].size());
 }
-size_t  CNNStructure::getNumWeightsCols(const size_t layerNum) {
+size_t  CNNStructureCUDA::getNumWeightsCols(const size_t layerNum) {
 	return(weights[layerNum][0].size());
 }
-vector<double> CNNStructure::getLayerNodes(const size_t& thisLayer) {
+vector<double> CNNStructureCUDA::getLayerNodes(const size_t& thisLayer) {
 	return(layerNodes[thisLayer]);
 }
 
-void CNNStructure::displayWeights(const size_t& thisLayer) {
+void CNNStructureCUDA::displayWeights(const size_t& thisLayer) {
 	cout << weights[thisLayer];
 }
-void CNNStructure::displayStructure() {
+void CNNStructureCUDA::displayStructure() {
 	cout << weights;
 }
 
-void CNNStructure::displayLayerNodes(const size_t& thisLayer) {
+void CNNStructureCUDA::displayLayerNodes(const size_t& thisLayer) {
 	cout << layerNodes[thisLayer];
 }
 
-CNNStructure & CNNStructure::operator+=(const CNNStructure& rhs) {
+CNNStructureCUDA & CNNStructureCUDA::operator+=(const CNNStructureCUDA& rhs) {
 	assert(weights.size() == rhs.weights.size());
 	assert(weights[0].size() == rhs.weights[0].size());
 	assert(weights[0][0].size() == rhs.weights[0][0].size());
@@ -133,15 +133,15 @@ CNNStructure & CNNStructure::operator+=(const CNNStructure& rhs) {
 					rhs.weights[layerCnt][rowCnt][colCnt];
 			}
 		}
-//The m,N element is reserved to be 1.
+		//The m,N element is reserved to be 1.
 		weights[layerCnt][weights[layerCnt].size() - 1][weights[layerCnt][0].size() - 1] = 1.;
 	}
 
 	return *this;
 }
 
-void CNNStructure::updateLayers(const vector<double>& input) {
-//input contains the starting layer nodes. 
+void CNNStructureCUDA::updateLayers(const vector<double>& input) {
+	//input contains the starting layer nodes. 
 	layerNodes[0] = input;
 	vector<double> tempLayer;
 	for (int layerCount = 0; layerCount < weights.size(); ++layerCount) {
@@ -150,19 +150,19 @@ void CNNStructure::updateLayers(const vector<double>& input) {
 		}
 		assert(tempLayer.size() == weights[layerCount][0].size());
 		vector<double> tempVec = matVecMult(weights[layerCount], tempLayer);
-//Sigma function
+		//Sigma function
 		for (int iCnt = 0; iCnt < tempVec.size(); ++iCnt) {
 
 			if (tempVec[iCnt] < 0.) {
 				tempVec[iCnt] = 0.;			//Comment it if you want to kill sigma.
 			}
 		}
-		layerNodes[layerCount+1] = tempVec;
-		tempLayer = tempVec;	
+		layerNodes[layerCount + 1] = tempVec;
+		tempLayer = tempVec;
 	}
 }
 
-void CNNStructure::divideScaler(const double& factor) {
+void CNNStructureCUDA::divideScaler(const double& factor) {
 	assert(factor != 0.);
 	for (size_t layerCount = 0; layerCount < weights.size(); ++layerCount) {
 		for (size_t rowCount = 0; rowCount < weights[layerCount].size(); ++rowCount) {
@@ -173,19 +173,19 @@ void CNNStructure::divideScaler(const double& factor) {
 	}
 }
 
-void CNNStructure::makeGradPass(CNNStructure& tempGradStruct,const vector<double>& desired) {
-// The goal here is to create the gradient for the single test case. 
-// There are multiple terms that need to be multiplied
-// together to form each element. Complete a layer (from back to front) 
-// before proceding to the next layer. The reason is that you need the results of layer L
-// inorder to get a cost for L-1.
+void CNNStructureCUDA::makeGradPass(CNNStructureCUDA& tempGradStruct, const vector<double>& desired) {
+	// The goal here is to create the gradient for the single test case. 
+	// There are multiple terms that need to be multiplied
+	// together to form each element. Complete a layer (from back to front) 
+	// before proceding to the next layer. The reason is that you need the results of layer L
+	// inorder to get a cost for L-1.
 	vector<double> pCpA;
 	for (size_t layerCount = weights.size(); layerCount > 0; --layerCount) {
 		vector<double> partRelu = matVecMult(weights[layerCount - 1], layerNodes[layerCount - 1]);
 		if (layerCount == weights.size()) {
 			pCpA = 2 * (layerNodes[layerCount] - desired); //Overloaded mult and minus.
 		}
-//Sigma
+		//Sigma
 		for (size_t rowCount = 0; rowCount < weights[layerCount - 1].size() - 1; ++rowCount) {
 
 			if (partRelu[rowCount] < 0.) {
@@ -194,14 +194,14 @@ void CNNStructure::makeGradPass(CNNStructure& tempGradStruct,const vector<double
 			else {
 				partRelu[rowCount] = 1.;
 			}
-//			partRelu[rowCount] = 1.;	//uncomment here and comment above to Kill sigma till you understand it.
-			for (size_t colCount = 0; colCount < weights[layerCount - 1][0].size()-1; ++colCount) {
-//(partial z wrt w)*partial relu*pCpA
+			//			partRelu[rowCount] = 1.;	//uncomment here and comment above to Kill sigma till you understand it.
+			for (size_t colCount = 0; colCount < weights[layerCount - 1][0].size() - 1; ++colCount) {
+				//(partial z wrt w)*partial relu*pCpA
 				tempGradStruct.weights[layerCount - 1][rowCount][colCount] +=
-					layerNodes[layerCount - 1][colCount] * partRelu[rowCount] *pCpA[rowCount];
+					layerNodes[layerCount - 1][colCount] * partRelu[rowCount] * pCpA[rowCount];
 			}
-// Each row also has a bias term at the end of the row.
-			tempGradStruct.weights[layerCount - 1][rowCount][weights[layerCount - 1][0].size()-1] +=
+			// Each row also has a bias term at the end of the row.
+			tempGradStruct.weights[layerCount - 1][rowCount][weights[layerCount - 1][0].size() - 1] +=
 				partRelu[rowCount] * pCpA[rowCount];
 		}
 		if (layerCount > 1) {
@@ -221,14 +221,14 @@ void CNNStructure::makeGradPass(CNNStructure& tempGradStruct,const vector<double
 	}
 }
 
-void CNNStructure::writeToFile(const string& outFileName) {
+void CNNStructureCUDA::writeToFile(const string& outFileName) {
 	ofstream outFile(outFileName);
-//The header is the size of each set of nodes corresponding to each layer.
+	//The header is the size of each set of nodes corresponding to each layer.
 
 	if (outFile.is_open()) {
-		outFile << " "<<weights[0][0].size();
+		outFile << " " << weights[0][0].size();
 		for (size_t iCnt = 0; iCnt < weights.size(); ++iCnt) {
-			outFile <<" "<< weights[iCnt].size();
+			outFile << " " << weights[iCnt].size();
 		}
 		outFile << "\n";
 		outFile << weights;
@@ -240,23 +240,23 @@ void CNNStructure::writeToFile(const string& outFileName) {
 	}
 }
 
-vector<int> CNNStructure::readFromFile(const string& inFileName) {
+vector<int> CNNStructureCUDA::readFromFile(const string& inFileName) {
 	ifstream inFile(inFileName);
 	//The header is the number of layers, and then the size of each set of nodes
 	//corresponding to each layer.
-	
+
 	if (inFile.is_open()) {
-//Get the first line and fill the structure vector.
+		//Get the first line and fill the structure vector.
 		weights.clear();
-		string line; 
+		string line;
 		getline(inFile, line);
 		istringstream in(line);
 		vector<int> structure = vector<int>(istream_iterator<double>(in), istream_iterator<double>());
-		for (size_t matrixCount = 0; matrixCount < structure.size()-1; ++matrixCount) {
+		for (size_t matrixCount = 0; matrixCount < structure.size() - 1; ++matrixCount) {
 			vector<vector<double>>tempMat;
 			for (size_t rowCount = 0; rowCount < structure[matrixCount + 1]; ++rowCount) {
 				getline(inFile, line);
-//Strip the [ and ] and replace the commas with spaces.
+				//Strip the [ and ] and replace the commas with spaces.
 				line.erase(remove(line.begin(), line.end(), '['), line.end());	//cannot replace with ''
 				line.erase(remove(line.begin(), line.end(), ']'), line.end());
 				replace(line.begin(), line.end(), ',', ' ');
@@ -266,9 +266,9 @@ vector<int> CNNStructure::readFromFile(const string& inFileName) {
 					vector<double> tempVec = vector<double>(istream_iterator<double>(in), istream_iterator<double>());
 					tempMat.push_back(tempVec);
 				}
-				else{
-//The above might let some empty lines slip through. Ignore them and don't let them count toward your rows. 
-//					cout << "\nEmpty string ignored\n";
+				else {
+					//The above might let some empty lines slip through. Ignore them and don't let them count toward your rows. 
+					//					cout << "\nEmpty string ignored\n";
 					--rowCount;
 				}
 			}
@@ -289,14 +289,14 @@ vector<int> CNNStructure::readFromFile(const string& inFileName) {
 	}
 }
 
-void CNNStructure::setToZeros() {
+void CNNStructureCUDA::setToZeros() {
 
 	for (size_t layerCount = 0; layerCount < this->weights.size(); ++layerCount) {
-		vector<double> vecTemp(this->weights[layerCount][0].size(),0);
+		vector<double> vecTemp(this->weights[layerCount][0].size(), 0);
 		for (size_t rowCount = 0; rowCount < this->weights[layerCount].size(); ++rowCount) {
 			this->weights[layerCount][rowCount] = vecTemp;
 		}
 
-	} 
+	}
 
 }

@@ -59,10 +59,10 @@ int main() {
 	cout << "\ndata1.getInputDimension() " << data1.getInputDimension();
 	
 //	CNNStructure testStruct(testCase, .5, 1.);
-	string inFile = "./states/10kweightsFile12.txt";
+	string inFile = "./states/10kweightsFile9.txt";
 //	string inFile = "./states/testWeights.txt";
 
-	string outFile = "./states/10kweightsFile13.txt";
+	string outFile = "./states/10kweightsFile10.txt";
 	size_t numTrainingLoops = 30000;
 	CNNStructure testStruct(inFile);
 
@@ -93,9 +93,8 @@ costHistory.reserve(numTrainingLoops);
 	if (numThreads < 2)numThreads = 2;		//Not a likely enough senario to change the threading paradigm.
 	vector<size_t> begin(numThreads), end(numThreads);
 
-//Create separate holdTempGradients(testCase) and holdAccumGradients(testCase) for each thread.
+//Create separate holdAccumGradients(testCase) for each thread.
 	vector<CNNStructure> holdAccumGradients(numThreads,CNNStructure(testCase));
-	vector<CNNStructure> holdTempGradients(numThreads, CNNStructure(testCase));
 
 	size_t totalSets = data1.getNumSets();
 	size_t numForEachSplit = totalSets / numThreads;

@@ -7,6 +7,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Project1", "Project1\Projec
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CNNWCUDA", "Project2\Project2.vcxproj", "{166FABE2-17C7-4459-ADB4-18A15549CB35}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CNNCUDA10Proj", "CNNCUDA10Proj\CNNCUDA10Proj.vcxproj", "{006F3E01-F65B-4F46-92CF-C3D67A60D667}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -31,6 +33,12 @@ Global
 		{166FABE2-17C7-4459-ADB4-18A15549CB35}.Release|x64.Build.0 = Release|x64
 		{166FABE2-17C7-4459-ADB4-18A15549CB35}.Release|x86.ActiveCfg = Release|Win32
 		{166FABE2-17C7-4459-ADB4-18A15549CB35}.Release|x86.Build.0 = Release|Win32
+		{006F3E01-F65B-4F46-92CF-C3D67A60D667}.Debug|x64.ActiveCfg = Debug|x64
+		{006F3E01-F65B-4F46-92CF-C3D67A60D667}.Debug|x64.Build.0 = Debug|x64
+		{006F3E01-F65B-4F46-92CF-C3D67A60D667}.Debug|x86.ActiveCfg = Debug|x64
+		{006F3E01-F65B-4F46-92CF-C3D67A60D667}.Release|x64.ActiveCfg = Release|x64
+		{006F3E01-F65B-4F46-92CF-C3D67A60D667}.Release|x64.Build.0 = Release|x64
+		{006F3E01-F65B-4F46-92CF-C3D67A60D667}.Release|x86.ActiveCfg = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

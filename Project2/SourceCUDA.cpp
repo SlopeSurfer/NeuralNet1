@@ -27,6 +27,29 @@ void calcGradientParts(CNNStructureCUDA& holdAccumGradients, const vector<int> t
 	cost = tempCost / double(data.getNumSets());
 }
 
+double*** getCWeights(vector<vector<vector<double>>>& weights) {
+	//Let's do an experiment. I'm going to want to pass c style arrays to the kernal. I'd like to keep the vector 
+	//stuff for as much as possible. Can I make a c style array directly from a vector. I think that I need to make memory
+	//for the layer vectors and row vectors. Then, the col vectors will just use the memory of the stl vector. Note that
+	//you get the address of a vector using the .data(). Note also that before you can get that for weights, you need to
+	//get the weights, which is accomplished here as a member function of CNNStructureCUDA. Note also that when I tried to
+	//return a copy of it, I had problems. When I returned an alias to it, that cleared the problem. I expect that returning
+	//a copy is fine. The problem is likely that I did not set up a copy constructor. This could blow you assumption that you
+	//don't have to make copy constructors, etc., when there are no pointers. 
+	//Note that I am returning a copy of p. Otherwise, it will be undefined when the function finishes. You may want to
+	//pass it through instead of returning it. 
+
+	double*** p;
+	p = new double**[weights.size()];
+
+	for (int layer = 0; layer < weights.size(); ++layer) {
+		p[layer] = new double*[weights[layer].size()];
+		for (int row = 0; row < weights[layer].size(); ++row) {
+				p[layer][row] = weights[layer][row].data();
+		}
+	}
+	return (p);
+}
 int main() {
 
 	//Set up the training data.
@@ -59,10 +82,10 @@ int main() {
 	cout << "\ndata1.getInputDimension() " << data1.getInputDimension();
 
 	//	CNNStructureCUDA testStruct(testCase, .5, 1.);
-	string inFile = "../project1/states/10kweightsFile12.txt";
+	string inFile = "../project1/states/10kweightsFile9.txt";
 	//	string inFile = "./states/testWeights.txt";
 
-	string outFile = "../project1/states/10kweightsFile13.txt";
+	string outFile = "../project1/states/10kweightsFile10.txt";
 	size_t numTrainingLoops = 30000;
 	CNNStructureCUDA testStruct(inFile);
 
@@ -87,63 +110,27 @@ int main() {
 	}
 	cout << "\nStarting cost " << tempCost;
 	costHistory.push_back(tempCost);
-//Let's do an experiment. I'm going to want to pass c style arrays to the kernal. I'd like to keep the vector 
-//stuff for as much as possible. Can I make a c style array directly from a vector. Start by seeing if you can 
-//get the address of a single vector and let a c pointer point to the memory. Note, in this case, you would not
-//even make any memory.
-	vector<vector<vector<double>>>temp{ { {1, 2}, {3, 4}, {5,6}}, {{11, 12}, {13, 14}, {15,16} } };
-	double*** p;
-	p = new double**[testStruct.getWeights().size()];
-/*	p[0]= temp[0].data();
-	p[4] = temp[4].data();
-	cout << "\np[0] " << *(p[0])<<" p1+1 "<<*(p[0]+1)<<"\n";
-	cout << "\np[4] " << *(p[4]) << " p4+1 " << *(p[4] + 1) << "\n";
-*/
+
+	double*** cWeights = getCWeights(testStruct.getWeights());
 
 	for (int layer = 0; layer < testStruct.getWeights().size(); ++layer) {
-		p[layer] = new double*[testStruct.getWeights()[layer].size()];
+		cout << "\nLayer check " << layer;
 		for (int row = 0; row < testStruct.getWeights()[layer].size(); ++row) {
-			cout << "\nlayer " << layer << " and row " << row;
-			p[layer][row] = testStruct.getWeights()[layer][row].data();
-			cout << "\np[layer][row] " << p[layer][row] <<" next  " << testStruct.getWeights()[layer][row].data() << " ";
-		}
-	}
-//	cout <<"\n"<< &p[1][0][0] << " next  " << testStruct.getWeights()[1][0].data() << " ";
-
-
-for (int layer = 0; layer < testStruct.getWeights().size(); ++layer) {
-		cout << "\nLayer "<<layer;
-		for (int row = 0; row < testStruct.getWeights()[layer].size(); ++row) {
-			cout << "\nrow " << row<<"\n";
-			for (int col = 0; col < testStruct.getWeights()[layer][row].size();++col) {
-				cout <<p[layer][row][col]<<" "<<testStruct.getWeights()[layer][row][col]<<" ";
-				if (p[layer][row][col] != testStruct.getWeights()[layer][row][col]) {
-					cout << "\n*********** Error they do not agree ";
-					exit(0);
+			for (int col = 0; col < testStruct.getWeights()[layer][row].size(); ++col) {
+				if (cWeights[layer][row][col] != testStruct.getWeights()[layer][row][col]) {
+					cout << "\n you have a mismatch for layer, row, col " << layer << " " << row << " " << col;
 				}
 			}
 		}
 	}
 
-
-/*
-	double *cStyleCol = testStruct.getWeights()[0][0].data();
-	
-// Now compare the column vector with cStyleCol
-	for (int iCnt = 0; iCnt < testStruct.getNumWeightsCols(0); ++iCnt) {
-		cout << "\niCnt"<<iCnt;
-		cout << "\ncStyleCol " << *(cStyleCol+iCnt);
-		cout << " and vector " << testStruct.getWeights()[0][0][iCnt];
-	}
-*/
-	//Start training
+//Start training
 	size_t numThreads = std::thread::hardware_concurrency();
 	if (numThreads < 2)numThreads = 2;		//Not a likely enough senario to change the threading paradigm.
 	vector<size_t> begin(numThreads), end(numThreads);
 
 	//Create separate holdTempGradients(testCase) and holdAccumGradients(testCase) for each thread.
 	vector<CNNStructureCUDA> holdAccumGradients(numThreads, CNNStructureCUDA(testCase));
-	vector<CNNStructureCUDA> holdTempGradients(numThreads, CNNStructureCUDA(testCase));
 
 	size_t totalSets = data1.getNumSets();
 	size_t numForEachSplit = totalSets / numThreads;

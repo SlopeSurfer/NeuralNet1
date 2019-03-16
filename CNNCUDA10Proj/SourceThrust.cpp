@@ -28,7 +28,7 @@ extern "C" void launchCudaPitch(int width, int height, size_t pitch, int* d_tab)
 extern "C" void launchCudaMatVecMult(double *d_cc, double *d_varArray, double* gatherArray,
 	dim3 blockSize, dim3 gridSize, int nx, int ny, int nz);
 extern "C" void launchCudaPVecReduce(double *d_constMatrix, double* d_varArray, double* d_gatherArray,
-	dim3 blockSize, dim3 gridSize, int nx, int ny, int nz, double*outArray);
+	dim3 blockSize, dim3 gridSize, int nx, int ny, int nz, double*outArray, bool shared = true);
 
 
 /*
@@ -212,9 +212,9 @@ int main(int argc, char **argv) {
 	#define BLKYSIZE 1
 	#define BLKZSIZE 1
 
-	#define NUMLAYERS 1024*2
-	#define NUMROWS 3
-	#define NUMCOLS 3
+	#define NUMLAYERS 2048
+	#define NUMROWS 75
+	#define NUMCOLS 75
 
 	dim3 blockSize(BLKXSIZE, BLKYSIZE, BLKZSIZE);
 	dim3 gridSize(((NUMLAYERS + BLKXSIZE - 1) / BLKXSIZE), ((NUMROWS + BLKYSIZE - 1) / BLKYSIZE), ((NUMCOLS + BLKZSIZE - 1) / BLKZSIZE));
@@ -279,6 +279,8 @@ int main(int argc, char **argv) {
 	cout << "\ngridSize before " <<gridSize.x << " " << gridSize.y << " " << gridSize.z;
 
 	launchCudaMatVecMult(d_constMatrix, d_varArray, d_gatherArray, blockSize, gridSize, nx, ny, nz);
+	cout << "\nBack from matrix vec mult";
+	cudaCheckErrors("Kernel launch failure");
 
 //The reduction takes half as many threads as layers. I'm going to cut the blockSize here. 
 //Not sure if it is worth the effort or risk. Note, reducing it here shows in the next print.
@@ -292,16 +294,15 @@ int main(int argc, char **argv) {
 	gridSize.y = 1;
 	gridSize.z = 1;
 
-	launchCudaPVecReduce(d_constMatrix, d_varArray, d_gatherArray, blockSize, gridSize, nx, ny, nz, d_outArray);
+	launchCudaPVecReduce(d_constMatrix, d_varArray, d_gatherArray, blockSize, gridSize, nx, ny, nz, d_outArray,false);
 
 	cout << "\nblockSize after " << blockSize.x << " " << blockSize.y << " " << blockSize.z;
 	cout << "\ngridSize after " << gridSize.x << " " << gridSize.y << " " << gridSize.z;
 	cudaCheckErrors("Kernel launch failure");
-	// copy output data back to host
-//I only want the gathering array back.
+	// copy output data back to host. I only need the out array.
 
 	cudaMemcpy(outArray, d_outArray, ((ny) * sizeof(double)), cudaMemcpyDeviceToHost);
-	cudaMemcpy(gatherArray, d_gatherArray, ((ny*nx) * sizeof(double)), cudaMemcpyDeviceToHost); //Just to check intermediate
+//	cudaMemcpy(gatherArray, d_gatherArray, ((ny*nx) * sizeof(double)), cudaMemcpyDeviceToHost); //Just to check intermediate
 	cudaCheckErrors("CUDA memcpy failure");
 
 //Do a CPU version of the matVecMult and reduction, to compare with the GPU.
@@ -317,6 +318,7 @@ int main(int argc, char **argv) {
 				temp += constMatrix[ row * NUMCOLS + col] * varArray[layer*NUMCOLS + col];
 			}
 			cpuGatherArray[layer][row] = temp;
+//			cout << "\ntemp " << temp;
 		}
 	}
 
@@ -355,6 +357,7 @@ int main(int argc, char **argv) {
 	}
 
 //Compare reductions
+/*
 	size_t numChecked = 0, numErrors = 0;
 	for (size_t layer = 0; layer < NUMLAYERS; ++layer) {
 //		cout << "\nlayer " << layer;
@@ -371,7 +374,7 @@ int main(int argc, char **argv) {
 		}
 	}
 	cout << "\nChecked " << numChecked << " values with " << numErrors << " errors ";
-
+*/
 /*	// and check for accuracy
 	for(size_t layer = 0; layer<nx;++layer){
 //		cout << "\n layer " << layer;
@@ -413,10 +416,14 @@ int main(int argc, char **argv) {
 	free(constMatrix);
 	free(varArray);
 	free(gatherArray);
+	free(outArray);
+	
 
 	cudaFree(d_constMatrix);
 	cudaFree(d_varArray);
 	cudaFree(d_gatherArray);
+	cudaFree(d_outArray);
+
 	cudaCheckErrors("cudaFree fail");
 	cudaDeviceReset();
 	exit(0);
@@ -537,7 +544,7 @@ int main(int argc, char **argv) {
 	size_t lapCounter = 0, numBetweenPrints = 9, numSinceLastPrint = 0;
 	// Set up a test case for the structure
 	host_vector<int> testCase;
-
+	vector<int> junk;	//Note this indicates that you do not need thrust vec
 	string fileNameLabels = "../project1/data/t10k-labels.idx1-ubyte";
 	string fileNameImages = "../project1/data/t10k-images.idx3-ubyte";
 

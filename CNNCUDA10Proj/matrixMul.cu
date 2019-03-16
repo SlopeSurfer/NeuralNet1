@@ -35,7 +35,7 @@ extern "C" void launchCudaMatVecMult(double *d_constMatrix, double* d_varArray,d
 	dim3 blockSize, dim3 gridSize, int nx, int ny, int nz);
 
 extern "C" void launchCudaPVecReduce(double *d_constMatrix, double* d_varArray, double* d_gatherArray,
-	dim3 blockSize, dim3 gridSize, int nx, int ny, int nz, double*outArray);
+	dim3 blockSize, dim3 gridSize, int nx, int ny, int nz, double*outArray, bool shared = true);
 
 // device function to set the 3D volume
 __global__ void pMatVecMult(double *cM, double *varA, double *gatherA, int nx, int ny, int nz)
@@ -52,7 +52,7 @@ __global__ void pMatVecMult(double *cM, double *varA, double *gatherA, int nx, i
 	}
 }
 
-__global__ void pVecReduce(double *gatherA, int nx, int ny, int n, double* out)
+__global__ void pVecReducedGlobal(double *gatherA, int nx, int ny, int n, double* out)
 {
 	size_t t_id = ny * (threadIdx.x + blockDim.x*blockIdx.x );
 
@@ -72,6 +72,33 @@ __global__ void pVecReduce(double *gatherA, int nx, int ny, int n, double* out)
 	}
 }
 
+__global__ void pVecReduceShared(double *gatherA, int nx, int ny, int n, double* out)
+
+{
+	extern double __shared__ sdata[];
+	size_t t_id = ny * (threadIdx.x + blockDim.x*blockIdx.x);
+	for (size_t row = 0; row < ny; ++row) {
+		sdata[t_id+row] = gatherA[t_id+row];
+		sdata[t_id + nx*ny / 2+row] = gatherA[t_id + nx*ny / 2+row];
+	}
+	__syncthreads();
+
+	for (size_t s = nx / 2; s > 0; s >>= 1) {
+		if (t_id < s*ny) {
+			for (size_t row = 0; row < ny; ++row) {
+				sdata[t_id + row] += sdata[t_id + s * ny + row];
+			}
+		}
+		__syncthreads();
+	}
+
+	if (t_id == 0) {
+		for (size_t row = 0; row < ny; ++row) {
+			out[row] = sdata[t_id + row];
+		}
+	}
+}
+
 void launchCudaMatVecMult(double *d_constMatrix, double* d_varArray, double* d_gatherArray,
 	dim3 blockSize, dim3 gridSize, int nx, int ny, int nz) {
 
@@ -80,11 +107,15 @@ void launchCudaMatVecMult(double *d_constMatrix, double* d_varArray, double* d_g
 }
 
 void launchCudaPVecReduce(double *d_constMatrix, double* d_varArray, double* d_gatherArray,
-	dim3 blockSize, dim3 gridSize, int nx, int ny, int nz, double*outArray) {
+	dim3 blockSize, dim3 gridSize, int nx, int ny, int nz, double*outArray,bool shared) {
 
-
-
-	pVecReduce << <gridSize, blockSize >> > (d_gatherArray, nx, ny, nz, outArray);
+	if (shared) {
+		pVecReduceShared << <gridSize, blockSize, nx*ny*sizeof(double) >> > (d_gatherArray, nx, ny, nz, outArray);
+	}
+	else
+	{
+		pVecReducedGlobal << <gridSize, blockSize >> > (d_gatherArray, nx, ny, nz, outArray);
+	}
 	cudaDeviceSynchronize();
 }
 

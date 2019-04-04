@@ -5,14 +5,34 @@
 struct weightsC {
 	double*** values;
 	int numLayers;
-	int* numRows;
-	int* numCols;
+	size_t* numRows;
+	size_t* numCols;
+};
+
+struct weightsCFlat {
+//Given layer, row, and column, address of associated weight is startLayer[layer]+row*numCols[layer]+column.
+	double* values;
+	size_t numLayers;
+	size_t* numRows;
+	size_t* numCols;
+	size_t* startLayer;
+	size_t length;
 };
 
 struct layerNodesC {
 	double** values;
 	int numLayers;
 	int* numNodes;
+
+};
+
+struct layerNodesCFlat {
+//Given layer and row, address of associated node is startLayer[layer] +row
+	double* values;
+	int numLayers;
+	int* numNodes;
+	size_t* startLayer;
+	size_t length;
 };
 
 struct reducedLayerNodesC {
@@ -26,6 +46,12 @@ struct CNNStructureC {
 	weightsC weights;
 	layerNodesC layerNodes;
 };
+
+struct CNNStructureCFlat {	//Note, the structure itself is not flat, just the members.
+	weightsCFlat weights;
+	layerNodesCFlat layerNodes;
+};
+
 template <class myType>
 struct structureC {
 	myType* structure;

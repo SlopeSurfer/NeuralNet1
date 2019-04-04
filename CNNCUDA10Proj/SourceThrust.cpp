@@ -22,6 +22,13 @@ using namespace std;
 #include <helper_cuda.h>
 #include "CStructs.h"
 
+//Next step for conversion to CUDA
+//Make a float version of calcGradientPartsC. As you change its input from C to CFlat
+//do the work with CUDA Kernels. Start with holdAccumGradients. Note that you could use the 
+//Flattened types to vary the signature of calls like setWeightsToZero. So, if its flat, calls Kernel version.
+//But, chances are that the whole thing is different enough that you'll really have different version of 
+//calcGradientPartsC.
+
 extern "C" void launchCuda(int* a, int* b, int*c, int n);//
 extern "C" void launchCudaMatrix(size_t numLoops, SimpleMatrix** myMatrix1, SimpleMatrix** myMatrix2);
 extern "C" void launchCudaPitch(int width, int height, size_t pitch, int* d_tab);
@@ -57,8 +64,12 @@ void launchCudaMatrix(size_t numLoops, SimpleMatrix** myMatrix1, SimpleMatrix** 
 //extern "C" void makeGradPassC(CNNStructureC* testStruct, CNNStructureC* tempGradStruct, double* desired);
 
 extern "C" void calcGradientPartsC(CNNStructureC *holdAccumGradients, structureC<int> *testCase, dataC* data,
-	CNNStructureC *testStruct, size_t begin, double* cost, reducedLayerNodesC* nodesForUpdating, const size_t numBlocks, const size_t numThreads);
+	CNNStructureC *testStruct, size_t begin, double* cost, reducedLayerNodesC* nodesForUpdating, 
+	const size_t numBlocks, const size_t numThreads);
 
+extern "C" void calcGradientPartsCUDA(CNNStructureCFlat *holdAccumGradients, structureC<int> *testCase, dataC* data,
+	CNNStructureC *testStruct, size_t begin, double* cost, reducedLayerNodesC* nodesForUpdating, 
+	const size_t numBlocks, const size_t numThreads);
 
 void calcGradientParts(CNNStructureThrust& holdAccumGradients, const host_vector<int> testCase, handNumberData& data,
 	CNNStructureThrust testStruct, size_t begin, size_t end, double& cost) {
@@ -91,6 +102,78 @@ myType*** getCTripleVector(host_vector<host_vector<host_vector<myType>>>& weight
 	return (p);
 }
 
+weightsC* getCWeightsFromVectors(host_vector<host_vector<host_vector<double>>>& weights) {
+	//Return a 3-D array of the weights associated with the vector of vectors of vectors weights.
+
+	weightsC* tempW = new weightsC;
+
+	size_t numLayers = weights.size();
+	tempW->numLayers = numLayers;
+	tempW->numRows = new size_t[numLayers];
+	tempW->numCols = new size_t[numLayers];
+	for (size_t layer = 0; layer < numLayers; ++layer) {
+		tempW->numRows[layer] = weights[layer].size();
+		tempW->numCols[layer] = weights[layer][0].size();
+	}
+
+	size_t totSize = 0.;
+	for (int layer = 0; layer < weights.size(); ++layer) {
+		for (int row = 0; row < weights[layer].size(); ++row) {
+			totSize += weights[layer].size()*weights[layer][row].size();
+		}
+	}
+
+	tempW->values = new double**[weights.size()];
+
+	for (int layer = 0; layer < weights.size(); ++layer) {
+		tempW->values[layer] = new double*[weights[layer].size()];
+		for (int row = 0; row < weights[layer].size(); ++row) {
+			for (int row = 0; row < weights[layer].size(); ++row) {
+				tempW->values[layer][row] = weights[layer][row].data();
+			}
+		}
+	}
+	return (tempW);
+}
+weightsCFlat* getCWeightsFromVectorsFlat(host_vector<host_vector<host_vector<double>>>& weights) {
+	//Return a 3-D array of the weights associated with the vector of vectors of vectors weights.
+
+	weightsCFlat* tempW = new weightsCFlat;   
+
+	size_t numLayers = weights.size();
+	tempW->numLayers = numLayers;
+	tempW->numRows = new size_t[numLayers];
+	tempW->numCols = new size_t[numLayers];
+	tempW->startLayer = new size_t[numLayers];
+	tempW->startLayer[0] = 0;
+	for (size_t layer = 0; layer < numLayers; ++layer) {
+		tempW->numRows[layer] = weights[layer].size();
+		tempW->numCols[layer] = weights[layer][0].size();
+		if (layer > 0) {
+			tempW->startLayer[layer] = tempW->startLayer[layer - 1] + tempW->numRows[layer - 1] * tempW->numCols[layer - 1];
+		}
+	}
+
+	size_t totSize = 0.;
+	for (int layer = 0; layer < weights.size(); ++layer) {
+		for (int row = 0; row < weights[layer].size(); ++row) {
+			totSize += weights[layer].size()*weights[layer][row].size();
+		}
+	}
+
+	tempW->values = new double[totSize];
+	tempW->length = totSize;
+
+	for (int layer = 0; layer < weights.size(); ++layer) {
+		for (int row = 0; row < weights[layer].size(); ++row) {
+			for (int col = 0; col < weights[layer][0].size(); ++col) {
+				tempW->values[tempW->startLayer[layer] + row * tempW->numCols[layer] + col] = weights[layer][row][col];
+			}
+		}
+	}
+	return (tempW);
+}
+
 template <class myType>
 myType** getCDoubleVector(host_vector<host_vector<myType>>& layerNodes) {
 	//Return a 2-D array of the layer nodes associated with the vector of vectors layerNodes.
@@ -101,6 +184,56 @@ myType** getCDoubleVector(host_vector<host_vector<myType>>& layerNodes) {
 		p[layer] = layerNodes[layer].data();
 	}
 	return (p);
+}
+
+layerNodesC*  getCLayerNodesFromVectors(host_vector<host_vector<double>>& layerNodes) {
+	//Return a 2-D array of the layer nodes associated with the vector of vectors layerNodes.
+	double** cLayerNodes = getCDoubleVector<double>(layerNodes);
+	layerNodesC* tempLayerNodesC = new layerNodesC;
+	tempLayerNodesC->values = cLayerNodes;
+	tempLayerNodesC->numLayers = layerNodes.size();
+	tempLayerNodesC->numNodes = new int[layerNodes.size()];
+	for (size_t layer = 0; layer < layerNodes.size(); ++layer) {
+		tempLayerNodesC->numNodes[layer] = layerNodes[layer].size();
+	}
+
+	return tempLayerNodesC;
+}
+
+layerNodesCFlat*  getCLayerNodesFromVectorsFlat(host_vector<host_vector<double>>& layerNodes) {
+	//Return a flattened array of the layer nodes associated with the vector of vectors layerNodes.
+//	double** cLayerNodes = getCDoubleVector<double>(layerNodes);
+
+	layerNodesCFlat* tempLayerNodesC = new layerNodesCFlat;
+	size_t tot = 0, numLayers;
+	numLayers = layerNodes.size();
+	for (size_t layer = 0; layer < layerNodes.size(); ++layer) {
+		tot += layerNodes[layer].size();
+	}
+
+	tempLayerNodesC->startLayer = new size_t[numLayers];
+	tempLayerNodesC->startLayer[0] = 0;
+	tempLayerNodesC->numLayers = numLayers;
+	tempLayerNodesC->numNodes = new int[numLayers];
+	for (size_t layer = 0; layer < numLayers; ++layer) {
+		tempLayerNodesC->numNodes[layer] = layerNodes[layer].size();
+		if (layer > 0) {
+			tempLayerNodesC->startLayer[layer] = tempLayerNodesC->startLayer[layer - 1] + tempLayerNodesC->numNodes[layer - 1];
+		}
+	}
+
+	double* cLayerNodes = new double[tot];
+	tempLayerNodesC->length = tot;
+
+	for (size_t layer = 0; layer < layerNodes.size(); ++layer) {
+		for (size_t row = 0; row < layerNodes[layer].size(); ++row) {
+			cLayerNodes[tempLayerNodesC->startLayer[layer] +row] = layerNodes[layer][row];
+		}
+	}
+
+	tempLayerNodesC->values = cLayerNodes;
+
+	return tempLayerNodesC;
 }
 
 template <class myType>
@@ -302,7 +435,6 @@ int main(int argc, char **argv) {
 	// copy output data back to host. I only need the out array.
 
 	cudaMemcpy(outArray, d_outArray, ((ny) * sizeof(double)), cudaMemcpyDeviceToHost);
-//	cudaMemcpy(gatherArray, d_gatherArray, ((ny*nx) * sizeof(double)), cudaMemcpyDeviceToHost); //Just to check intermediate
 	cudaCheckErrors("CUDA memcpy failure");
 
 //Do a CPU version of the matVecMult and reduction, to compare with the GPU.
@@ -322,23 +454,6 @@ int main(int argc, char **argv) {
 		}
 	}
 
-	// Compare cpuGatherArray with gatherArray without calling reduction.
-	//MatrixVec multiplication. Note, you can only check this when gatherArray has not been reduced. 
-	/*
-
-	size_t numChecked = 0, numErrors = 0;
-	for (size_t layer = 0; layer < NUMLAYERS; ++layer) {
-		for (size_t row = 0; row < NUMROWS; ++row) {
-			numChecked++;
-			if (cpuGatherArray[layer][row] != gatherArray[layer*NUMROWS + row]) {
-				numErrors++;
-				cout << "\nMismatch between cpu and gpu " << cpuGatherArray[layer][row] << " " << gatherArray[layer*NUMROWS + row];
-			}
-		}
-	}
-	cout << "\nChecked " << numChecked << " values with " << numErrors << " errors ";
-*/
-
 //Do the reduction. 
 
 	for (size_t s = NUMLAYERS / 2; s > 0; s >>= 1) {
@@ -356,56 +471,6 @@ int main(int argc, char **argv) {
 		cout << cpuGatherArray[0][row]<<" ";
 	}
 
-//Compare reductions
-/*
-	size_t numChecked = 0, numErrors = 0;
-	for (size_t layer = 0; layer < NUMLAYERS; ++layer) {
-//		cout << "\nlayer " << layer;
-		for (size_t row = 0; row < NUMROWS; ++row) {
-//			cout << "\nrow " << row;
-//			cout << "\ncpu and gpu " << cpuGatherArray[layer][row] << " " << gatherArray[layer*NUMROWS + row];
-			numChecked++;
-			if (cpuGatherArray[layer][row] != gatherArray[layer*NUMROWS + row]) {
-				numErrors++;
-			
-				cout << "\nMismatch between cpu and gpu " << cpuGatherArray[layer][row] << " " <<
-					gatherArray[layer*NUMROWS + row] << " layer = " << layer << " row = " << row;
-			}
-		}
-	}
-	cout << "\nChecked " << numChecked << " values with " << numErrors << " errors ";
-*/
-/*	// and check for accuracy
-	for(size_t layer = 0; layer<nx;++layer){
-//		cout << "\n layer " << layer;
-		for (unsigned row = 0; row < ny; row++) {
-//			cout << "\nRow " << j << " ";
-			size_t index = layer * ny + row;
-//			cout << gatherArray[index] << " ";
-
-			if (gatherArray[index] != double(row)) {
-				printf("\nMismatch gatherArray[index] %f layer= %d, row= %d  ",gatherArray[index], layer, row);
-//				return 1;
-			}
-		}
-	}
-*/	
-//I'm going to make a CPU version of the reduction here. Threadx (layer) will come from blockSize.x
-//And thready (row) will come from blockSize.y. The total number of layers (to be summed up) is gridSize.x * blockSize.x
-/*
-	for (size_t layer = blockSize.x*gridSize.x/2; layer > 0; layer >>= 1) {
-		for (size_t subLayer = 0; subLayer < layer; ++subLayer) {
-			for (size_t row = 0; row < NUMROWS; ++row) {
-				size_t index0 = subLayer * NUMROWS + row;
-				size_t index1 =  (subLayer+layer)*NUMROWS + row;
-				if (index1 < NUMLAYERS*NUMROWS) {
-					gatherArray[index0] += gatherArray[index1];
-
-				}
-			}
-		}
-	}
-	*/
 	cout << "\nReduced out\n";
 	for (size_t row = 0; row < NUMROWS; ++row) {
 		cout << outArray[row] << " ";
@@ -418,7 +483,6 @@ int main(int argc, char **argv) {
 	free(gatherArray);
 	free(outArray);
 	
-
 	cudaFree(d_constMatrix);
 	cudaFree(d_varArray);
 	cudaFree(d_gatherArray);
@@ -426,130 +490,24 @@ int main(int argc, char **argv) {
 
 	cudaCheckErrors("cudaFree fail");
 	cudaDeviceReset();
-	exit(0);
 
-/*
-//Pitch method
-	cout << "\nFirst pitch example" << "\n";
-	int width = 4;
-	int height = 4;
-
-	int* d_tab;
-	int* h_tab;
-
-	int realSize = width * height * sizeof(int);
-
-	size_t pitch;
-	check(cudaMallocPitch(&d_tab, &pitch, width * sizeof(int), height));
-	h_tab = (int*)malloc(realSize);
-	check(cudaMemset(d_tab, 0, realSize));
-
-	launchCudaPitch(width, height, pitch, d_tab);
-
-	check(cudaMemcpy2D(h_tab, width * sizeof(int), d_tab, pitch, width * sizeof(int), height, cudaMemcpyDeviceToHost));
-
-	showMatrix2(h_tab, width, height);
-	printf("\nPitch size: %ld \n", pitch);
-
-	exit(0);
-
-	//End CUDA test
-*/
-//Do some memory experiments
-/*
-	size_t memSize = 100000000;
-	double* checkMem = new double[memSize];
-	for (size_t iCnt = 0; iCnt < memSize; ++iCnt) {
-		checkMem[iCnt] = 1.;
-	}
-	double* d_checkMem;
-	cudaMalloc((void**)&d_checkMem, memSize * sizeof(double));
-	cudaMemcpy(d_checkMem, checkMem, memSize * sizeof(double), cudaMemcpyHostToDevice);
-
-	if (checkMem) {
-		cout << "\nAllocated memory for " << memSize << " doubles";
-
-	}
-	else
-	{
-		cout << "\ncould not allocate memory of " << memSize << " doubles";
-	}
-	int junk;
-	cin >> junk;
-	exit(0);
-*/
-// Let's try a class example. 
-/*
-	size_t numRows(5), numCols(7);
-	size_t numLoops = 10000;
-	cout << "\n Making myMatrix1 ";
-	SimpleMatrix** myMatrix1;
-	SimpleMatrix** myMatrix2;
-
-	cudaMallocManaged(&myMatrix1, numLoops * sizeof(double));
-	cudaMallocManaged(&myMatrix2, numLoops * sizeof(double));
-
-	cout << "\nsize " << sizeof(myMatrix1);
-	cout << "\n Made first layer  memory ";
-	for (size_t loopCount = 0; loopCount < numLoops; ++loopCount) {
-//		cout << "\nloopCount should make it to " << loopCount << " " << numLoops;
-
-		myMatrix1[loopCount] = new SimpleMatrix(numRows, numCols, .00001*double(loopCount));
-
-		if (myMatrix1[loopCount] == nullptr) {
-			cout << "\nMatrix1 Error at "<<loopCount;
-			exit(0);
-		}
-		myMatrix2[loopCount] = new SimpleMatrix(numRows, numCols, .3);
-		if (myMatrix2[loopCount] == nullptr) {
-			cout << "\nMatrix2 Error at " << loopCount;
-			exit(0);
-		}
-	}
-
-	cout << "\nMatrix1[1] result " << "\n";
-	for (size_t row = 0; row < numRows; ++row) {
-		cout << "\n row = " << row;
-		for (size_t col = 0; col < numCols; ++col) {
-			cout << " " << myMatrix1[1]->getMatrixElem(row, col);
-		}
-	}
-	cout << "\nMatrix2[1] result " << "\n";
-	for (size_t row = 0; row < numRows; ++row) {
-		cout << "\n row = " << row;
-		for (size_t col = 0; col < numCols; ++col) {
-			cout << " " << myMatrix2[1]->getMatrixElem(row, col);
-		}
-	}
-
-	launchCudaMatrix(numLoops, myMatrix1, myMatrix2);
-
-	cout << "\nMatrix1[0] result after CUDA" << "\n";
-	for (size_t row = 0; row < numRows; ++row) {
-		cout << "\n row = " << row;
-		for (size_t col = 0; col < numCols; ++col) {
-			cout << " " << myMatrix1[1]->getMatrixElem(row, col);
-		}
-	}
-
-	cudaFree(myMatrix1);
-	cudaFree(myMatrix2);
-
-	exit(0);
-*/
-// End of class example
 	//Set up the training data.
 
 	double gradientCutDown = 200.;
 	size_t lapCounter = 0, numBetweenPrints = 9, numSinceLastPrint = 0;
 	// Set up a test case for the structure
 	host_vector<int> testCase;
-	vector<int> junk;	//Note this indicates that you do not need thrust vec
+	vector<int> junk;	//Note this indicates that you might not need thrust vec
 	string fileNameLabels = "../project1/data/t10k-labels.idx1-ubyte";
 	string fileNameImages = "../project1/data/t10k-images.idx3-ubyte";
 
 	handNumberData data1(fileNameImages, fileNameLabels);
 	data1.displayImage(5);
+
+	//The following determines the size of the network. The input dimension determines the columns of the first
+	//matrix. The number of rows of the first matrix is determined by the number in the next layer. The following
+	//makes a four layer system(two hidden layers).
+
 	testCase.push_back((int)data1.getInputDimension());
 	testCase.push_back(16);
 	testCase.push_back(16);
@@ -602,66 +560,117 @@ int main(int argc, char **argv) {
 	cout << "\nStarting cost " << tempCost;
 	costHistory.push_back(tempCost);
 
-	double*** cWeights = getCTripleVector<double>(testStruct.getWeights());
-	double*** cWeightsTemp[numThreads];
-	double** cLayerNodesTemp[numThreads];
+	//Make the testStructure copy.
+
+	weightsC* testWeightsC = getCWeightsFromVectors(testStruct.getWeights());
+	layerNodesC* testLayerNodesC = getCLayerNodesFromVectors(testStruct.getLayerNodes());
+
+	float totCount = 0, failCount = 0;
+#ifdef _DEBUG
+	//Check testLayerNodesC against testStruct layerNodes
+
+	for (size_t layer = 0; layer < testStruct.getNumWeightsMatrices(); ++layer) {
+		for (size_t row = 0; row < testStruct.getLayerNodes()[layer].size(); ++row) {
+
+			++totCount;
+			if (testLayerNodesC->values[layer][row] != testStruct.getLayerNodes()[layer][row]) {
+				++failCount;
+				cout << "\ntestLayerNodesC[layer][row] " << testLayerNodesC->values[layer][row] << " and "
+					<< testStruct.getLayerNodes()[layer][row];
+			}
+		}
+	}
+	cout << "\nChecking layernodes total checked " << totCount << " and error count " << failCount;
+#endif
+
+//Now make flattened versions. Note, that I plan to start with flattened arrays of the actual values,
+//but still store them in structures (not making the entire structure flat).
+
+	weightsCFlat* testWeightsCFlat = getCWeightsFromVectorsFlat(testStruct.getWeights());
+	layerNodesCFlat* testLayerNodesCFlat = getCLayerNodesFromVectorsFlat(testStruct.getLayerNodes());
+#ifdef _DEBUG
+	//Check testLayerNodesCFlat against testStruct.getLayerNodes()
+	totCount = 0, failCount = 0;
+	for (size_t layer = 0; layer < testStruct.getNumWeightsMatrices(); ++layer) {
+		for (size_t row = 0; row < testStruct.getLayerNodes()[layer].size(); ++row) {
+
+			++totCount;
+			if (testLayerNodesCFlat->values[testLayerNodesCFlat->startLayer[layer]+row]
+				!= testStruct.getLayerNodes()[layer][row]) {
+				++failCount;
+				cout << "\nLayer and row " <<layer<<" "<<row<<" Flat = "<<
+					testLayerNodesCFlat->values[testLayerNodesCFlat->startLayer[layer] + row] << " and reg = "
+					<< testStruct.getLayerNodes()[layer][row];
+			}
+		}
+	}
+	cout << "\nChecking layernodesFlat total checked " << totCount << " and error count " << failCount;
+	
+
+	//Check testWeightsCFlat against cWeights.
+	cout << "\nChecking flattened weights ";
+	size_t numErrors = 0;
+	for (size_t layer = 0; layer < testWeightsCFlat->numLayers; ++layer) {
+		for (size_t row = 0; row < testWeightsCFlat->numRows[layer]; ++row) {
+			for (size_t col = 0; col < testWeightsCFlat->numCols[layer]; ++col) {
+				double c1, c2;
+				c1 = testWeightsC->values[layer][row][col];
+				c2 = testWeightsCFlat->values[testWeightsCFlat->startLayer[layer] + testWeightsCFlat->numCols[layer] * row + col];
+				if (c1 != c2) {
+					cout << "\nlayer " << layer;
+					cout << "\nrow " << row;
+					cout << "\n " << testWeightsC->values[layer][row][col] << " = " <<
+						testWeightsCFlat->values[testWeightsCFlat->startLayer[layer] + testWeightsCFlat->numCols[layer] * row + col];
+					++numErrors;
+				}
+			}    
+		}
+	}
+	if (numErrors != 0) {
+		cout << "\n Found " << numErrors << " differences";
+	}
+	else {
+		cout << "\nNo errors found for cWeightsFlat ";
+	}
+#endif
+
+	weightsC** testWeightsCTemp = new weightsC*[numThreads];	//Making an array of ptrs.
+	layerNodesC** testLayerNodesCTemp = new layerNodesC*[numThreads];
+
 	for (size_t iCnt = 0; iCnt < numThreads; ++iCnt) {
-		cWeightsTemp[iCnt] = getCTripleVector<double>(holdAccumGradients[iCnt].getWeights());
-		cLayerNodesTemp[iCnt] = getCDoubleVector<double>(holdAccumGradients[0].getLayerNodes());
+
+		testWeightsCTemp[iCnt] = getCWeightsFromVectors(holdAccumGradients[iCnt].getWeights());
+		testLayerNodesCTemp[iCnt] = getCLayerNodesFromVectors(holdAccumGradients[0].getLayerNodes());
 	}
-//Make the testStructure copy.
-	weightsC testWeightsC;
+	weightsCFlat** testWeightsCTempFlat = new weightsCFlat*[numThreads];	//Making an array of ptrs.
+	layerNodesCFlat** testLayerNodesCTempFlat = new layerNodesCFlat*[numThreads];
 
-	testWeightsC.values = cWeights;
-	testWeightsC.numLayers = testStruct.getNumWeightsMatrices();
-	testWeightsC.numRows = new int[testWeightsC.numLayers];
-	testWeightsC.numCols = new int[testWeightsC.numLayers];
+	for (size_t iCnt = 0; iCnt < numThreads; ++iCnt) {
 
-	for (size_t layer = 0; layer < testWeightsC.numLayers; layer++) {
-		testWeightsC.numRows[layer] = testStruct.getNumWeightsRows(layer);
-		testWeightsC.numCols[layer] = testStruct.getNumWeightsCols(layer);
-	}
-	double** cLayerNodes = getCDoubleVector<double>(testStruct.getLayerNodes());
-	layerNodesC testLayerNodesC;
-	testLayerNodesC.values = cLayerNodes;
-	testLayerNodesC.numLayers = testCase.size();
-	testLayerNodesC.numNodes = new int[testCase.size()];
-
-// Make holdAccumGradients copy(ies). 
-	weightsC testWeightsCTemp[numThreads];
-	layerNodesC testLayerNodesCTemp[numThreads];
-	for (size_t iCnt=0; iCnt < numThreads; ++iCnt) {
-		testWeightsCTemp[iCnt].values = cWeightsTemp[iCnt];
-		testWeightsCTemp[iCnt].numLayers = holdAccumGradients[iCnt].getNumWeightsMatrices();
-		testWeightsCTemp[iCnt].numRows = new int[testWeightsCTemp[iCnt].numLayers];
-		testWeightsCTemp[iCnt].numCols = new int[testWeightsCTemp[iCnt].numLayers];
-
-		for (size_t layer = 0; layer < testWeightsCTemp[iCnt].numLayers; layer++) {
-			testWeightsCTemp[iCnt].numRows[layer] = holdAccumGradients[iCnt].getNumWeightsRows(layer);
-			testWeightsCTemp[iCnt].numCols[layer] = holdAccumGradients[iCnt].getNumWeightsCols(layer);
-		}
-		testLayerNodesCTemp[iCnt].values = cLayerNodesTemp[iCnt];
-		testLayerNodesCTemp[iCnt].numLayers = testCase.size();
-		testLayerNodesCTemp[iCnt].numNodes = new int[testCase.size()];
-
-		for (size_t layer = 0; layer < testCase.size(); ++layer) {
-			testLayerNodesCTemp[iCnt].numNodes[layer] = testCase[layer];
-		}
-	}
-
-	for (size_t layer = 0; layer < testCase.size(); ++layer) {
-		testLayerNodesC.numNodes[layer] = testCase[layer];
+		testWeightsCTempFlat[iCnt] = getCWeightsFromVectorsFlat(holdAccumGradients[iCnt].getWeights());
+		testLayerNodesCTempFlat[iCnt] = getCLayerNodesFromVectorsFlat(holdAccumGradients[0].getLayerNodes());
 	}
 
 	CNNStructureC testStructC;
-	testStructC.weights = testWeightsC;
-	testStructC.layerNodes = testLayerNodesC;
+	testStructC.weights = *testWeightsC;
+	testStructC.layerNodes = *testLayerNodesC;
+
+	CNNStructureCFlat testStructCFlat;
+	testStructCFlat.weights = *testWeightsCFlat;
+	testStructCFlat.layerNodes = *testLayerNodesCFlat;
 
 	CNNStructureC holdAccumGradientsC[numThreads];
 	for (size_t iCnt = 0; iCnt < numThreads; ++iCnt) {
-		holdAccumGradientsC[iCnt].weights = testWeightsCTemp[iCnt];
-		holdAccumGradientsC[iCnt].layerNodes = testLayerNodesCTemp[iCnt];
+		holdAccumGradientsC[iCnt].weights = *testWeightsCTemp[iCnt];
+		holdAccumGradientsC[iCnt].layerNodes = *testLayerNodesCTemp[iCnt];
 	}
+
+	CNNStructureCFlat holdAccumGradientsCFlat[numThreads];
+	for (size_t iCnt = 0; iCnt < numThreads; ++iCnt) {
+		holdAccumGradientsCFlat[iCnt].weights = *testWeightsCTempFlat[iCnt];
+		holdAccumGradientsCFlat[iCnt].layerNodes = *testLayerNodesCTempFlat[iCnt];
+	}
+
 	int* tempCaseC = getCSingleVector<int>(testCase);
 	structureC<int> testCaseC;
 	testCaseC.structure = tempCaseC;
@@ -671,10 +680,11 @@ int main(int argc, char **argv) {
 		cout << "\ntestCase C and V " << testCaseC.structure[layer] << " " << testCase[layer];
 	}
 #endif
-//Copy data to a dataC.
+//Copy data to a dataC. I think that each of the inputs and outputs for each set is already flat. Just like with the 
+//structures, I don't know if further flattening is necessary. 
 	dataC  data1C;
 	data1C.numInputs = data1.getInputDimension();	
-	cout << "\ntestLayerNodesC.numLayers " << testLayerNodesC.numLayers;
+	cout << "\ntestLayerNodesC->numLayers " << testLayerNodesC->numLayers;
 	data1C.numOutputs = data1.getOutputDimension();		
 	cout << "\n Should be 785 " << data1C.numInputs << " and 11 " << data1C.numOutputs;
 	data1C.numSets = data1.getNumSets();
@@ -689,7 +699,7 @@ int main(int argc, char **argv) {
 
 		data1C.labels[sets] = data1.getLabel(sets);
 	}
-//Make the memory for the educed nodes.
+//Make the memory for the reduced nodes.
 	reducedLayerNodesC* nodesForUpdating;
 	nodesForUpdating = setUpLayerNodes(&data1C, &testStructC);
 
@@ -723,9 +733,29 @@ int main(int argc, char **argv) {
 	double costFromGradCalc;
 	double costFromGradCalcC;
 	auto beginLoopTime = chrono::high_resolution_clock::now();
-	for (size_t trainLoops = 0; trainLoops < numTrainingLoops; ++trainLoops) {
 
-//end = 10; //Cutting this way back for testing.
+//Let's start by putting the weights for holdAccumGradientsCFlat on the device.
+	double ** d_holdAccumGradientsCFlatWeights = new double*[numThreads];
+
+	for (size_t set = 0; set < numThreads; ++set) {
+		cudaMalloc((void **)&d_holdAccumGradientsCFlatWeights[set],holdAccumGradientsCFlat[set].weights.length * sizeof(double));
+//The following is what sets the values on the device. However, in this case, there are no values. They will be set to zero
+//on the device. It may be possible to skip the Memcpy. 
+		cudaMemcpy(d_holdAccumGradientsCFlatWeights[set],
+			holdAccumGradientsCFlat[set].weights.values, holdAccumGradientsCFlat[set].weights.length * sizeof(double),
+			cudaMemcpyHostToDevice);
+	}
+	for (size_t trainLoops = 0; trainLoops < numTrainingLoops; ++trainLoops) {
+		/*
+GPU discussion. I expect to see significant savings when I put all the data on the device before entering
+this training loop and only occasionally getting just the reduced cost number out after each iteration
+through the entire training set. Until that, my plan is to add kernels that do their part in the pipeline
+returning results back to the CPU to continue the pipeline. The idea is that I'll be able to check that each
+kernel has performed the same as the previous CPU version. I don't expect time savings from that. Just an
+incremental method for getting to the savings. The first kernel will just set the holdAccumGradientCFlat arrays
+to zero.
+*/
+
 //Note that holdAccumGradients and testStruct use different memory. However, holdAccumGradients and holdAccumGradientsC
 //share the same memory. As does testStruct and testStruct C. In the following, testStruct is not supposed to change.
 //holdAccum... does. Each should calculate the same change. But, to compare, you need to observe them as 
@@ -733,18 +763,36 @@ int main(int argc, char **argv) {
 //the respective functions. 
 //		calcGradientParts(holdAccumGradients, testCase, data1, testStruct, begin, end, costFromGradCalc);
 
-		calcGradientPartsC(holdAccumGradientsC, &testCaseC, &data1C, &testStructC, begin, &costFromGradCalcC, 
+//		calcGradientPartsC(holdAccumGradientsC, &testCaseC, &data1C, &testStructC, begin, &costFromGradCalcC, 
+//			nodesForUpdating, numBlocks, numThreads);
+
+		calcGradientPartsCUDA(holdAccumGradientsCFlat, &testCaseC, &data1C, &testStructC, begin, &costFromGradCalcC, 
 			nodesForUpdating, numBlocks, numThreads);
 
-		// Normalize by dividing by the number of entries. You may want to do other things to reduce it as well.
-		holdAccumGradients[0].divideScaler(double(-gradientCutDown * (data1.getNumSets())));
+// Normalize by dividing by the number of entries. You may want to do other things to reduce it as well.
+//		holdAccumGradients[0].divideScaler(double(-gradientCutDown * (data1.getNumSets())));
+		for (size_t i = 0; i < holdAccumGradientsCFlat->weights.length; ++i) {
+			holdAccumGradientsCFlat[0].weights.values[i] /= (double(-gradientCutDown * (data1.getNumSets())));
+		}
 
 //Since holdAccumGradients and holdAccumGradientsC both point to the same memory. It does not matter whether you 
 //update holdAccumGradients or holdAccumGradientsC. Either way, you have updated holdAccumGradients below. So,
 //you can use vectors again.
 
 // Modify the weights and biases.
-		testStruct += holdAccumGradients[0];
+
+		size_t indexFlattened = 0;
+		for (size_t layer = 0; layer < testStruct.getNumWeightsMatrices(); ++layer) {//Fix this kluge when testStruct is flattened.
+			for (size_t row = 0; row < testStruct.getNumWeightsRows(layer); ++row) {
+				for (size_t col = 0; col < testStruct.getNumWeightsCols(layer); ++col) {
+					holdAccumGradients[0].setWeights(layer, row, col, 
+						holdAccumGradientsCFlat[0].weights.values[indexFlattened]);
+					++indexFlattened;
+
+				}
+			}
+		}
+		testStruct += holdAccumGradients[0];	 
 
 		costHistory.push_back(costFromGradCalcC);
 

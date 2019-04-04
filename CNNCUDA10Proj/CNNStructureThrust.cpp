@@ -303,3 +303,6 @@ void CNNStructureThrust::setToZeros() {
 	}
 
 }
+void CNNStructureThrust::setWeights(size_t layer, size_t row, size_t col, double value) {
+	weights[layer][row][col] = value;
+}

@@ -188,11 +188,14 @@ void matVecMultC(double** weights, double* inVector, int numRows, int numCols, d
 		p1[rowCount] = tempSum;
 	}
 }
+
+
 void plusEqualsStruct(CNNStructureC *holdAccumGradients1, CNNStructureC *holdAccumGradients2) {
 	for (size_t numLayer = 0; numLayer < holdAccumGradients1->weights.numLayers; ++numLayer) {
 		for (size_t numRow = 0; numRow < holdAccumGradients1->weights.numRows[numLayer]; ++numRow) {
 			for (size_t numCol = 0; numCol < holdAccumGradients1->weights.numCols[numLayer]; ++numCol) {
-				holdAccumGradients1->weights.values[numLayer][numRow][numCol] += holdAccumGradients2->weights.values[numLayer][numRow][numCol];
+				holdAccumGradients1->weights.values[numLayer][numRow][numCol] +=
+					holdAccumGradients2->weights.values[numLayer][numRow][numCol];
 			}
 		}
 	}
@@ -207,6 +210,32 @@ void setWeightsToZeros(CNNStructureC *input) {
 		}
 	}
 };
+void plusEqualsStruct(CNNStructureCFlat *holdAccumGradients1, CNNStructureCFlat *holdAccumGradients2) {
+	size_t indexFlatten;
+	for (size_t numLayer = 0; numLayer < holdAccumGradients1->weights.numLayers; ++numLayer) {
+		for (size_t numRow = 0; numRow < holdAccumGradients1->weights.numRows[numLayer]; ++numRow) {
+			for (size_t numCol = 0; numCol < holdAccumGradients1->weights.numCols[numLayer]; ++numCol) {
+				indexFlatten = holdAccumGradients1->weights.startLayer[numLayer] +
+					numRow * holdAccumGradients1->weights.numCols[numLayer] + numCol;
+				holdAccumGradients1->weights.values[indexFlatten] +=
+					holdAccumGradients2->weights.values[indexFlatten];
+			}
+		}
+	}
+};
+
+
+void setWeightsToZeros(CNNStructureCFlat *input) {
+	//Assumes input already has memory created.
+	for (int layer = 0; layer < input->weights.numLayers - 1; ++layer) {
+		for (int row = 0; row < input->weights.numRows[layer]; ++row) {
+			for (int col = 0; col < input->weights.numCols[layer]; ++col) {
+				input->weights.values[input->weights.startLayer[layer] + row * input->weights.numCols[layer] + col] = 0;
+			}
+		}
+	}
+};
+
 void structMatVecMult(CNNStructureC* inStruct, reducedLayerNodesC* nodesForUpdating, double* inVector, int numLayer, int whichCase) {
 	int numCols = inStruct->weights.numCols[numLayer];
 	int numRows = inStruct->weights.numRows[numLayer];
@@ -261,9 +290,13 @@ double calcCostC(CNNStructureC* inputStruct, dataC* inputData, reducedLayerNodes
 void makeGradPassC(CNNStructureC* testStruct, CNNStructureC* tempGradStruct, reducedLayerNodesC* nodesForUpdating, 
 	dataC* data, size_t whichCase);
 
+void makeGradPassCUDA(CNNStructureC* testStruct, CNNStructureCFlat* tempGradStruct, reducedLayerNodesC* nodesForUpdating,
+	dataC* data, size_t whichCase);
+
 extern "C" void calcGradientPartsC(CNNStructureC holdAccumGradients[], structureC<int> *testCase, dataC* data,
 	CNNStructureC *testStruct, size_t begin, double* cost, reducedLayerNodesC* nodesForUpdating, 
 		const size_t numBlocks, const size_t numThreads) {
+
 	size_t end = numBlocks * numThreads;
 
 	for (size_t iCnt = 1; iCnt < numThreads; ++iCnt) {	//Note, currently hardwiring in begin at 0
@@ -303,6 +336,53 @@ extern "C" void calcGradientPartsC(CNNStructureC holdAccumGradients[], structure
 	printf("\t%f", *cost);
 
 }
+
+extern "C" void calcGradientPartsCUDA(CNNStructureCFlat holdAccumGradients[], structureC<int> *testCase, dataC* data,
+	CNNStructureC *testStruct, size_t begin, double* cost, reducedLayerNodesC* nodesForUpdating,
+	const size_t numBlocks, const size_t numThreads) {
+
+	size_t end = numBlocks * numThreads;
+
+// Set up (zero out) numThreads number of holdAccumGradients. Each will be added to as you work towards
+// the average over all the training sets. 
+
+	for (size_t iCnt = 1; iCnt < numThreads; ++iCnt) {	//Note, currently hardwiring in begin at 0
+		setWeightsToZeros(&holdAccumGradients[iCnt]); // Zero this out because of the += later.
+	}
+//	launchCUDAGradientsZero(d_holdAccumGradientsCFlatWeights);
+
+	double tempCost = 0;
+	size_t tSet;
+	for (size_t blockNum = 0; blockNum < numBlocks; ++blockNum) {
+		for (size_t iCnt = 0; iCnt < numThreads; ++iCnt) {	//Note, currently hardwiring in begin at 0
+			tSet = blockNum * numThreads + iCnt;
+			updateLayersC(testStruct, data, nodesForUpdating, tSet);
+		}
+	}
+	for (size_t blockNum = 0; blockNum < numBlocks; ++blockNum) {
+		for (size_t iCnt = 0; iCnt < numThreads; ++iCnt) {	//Note, currently hardwiring in begin at 0
+			tSet = blockNum * numThreads + iCnt;
+			tempCost += calcCostC(testStruct, data, nodesForUpdating, tSet, false);
+		}
+	}
+	for (size_t blockNum = 0; blockNum < numBlocks; ++blockNum) {
+		for (size_t iCnt = 0; iCnt < numThreads; ++iCnt) {	//Note, currently hardwiring in begin at 0
+			tSet = blockNum * numThreads + iCnt;
+			// Add to holdAccumGradients for this test set. 
+			makeGradPassCUDA(testStruct, &holdAccumGradients[iCnt], nodesForUpdating, data, tSet);
+		}
+	}
+	//For the moment, just gather them up, here.
+
+	for (size_t iCnt = 1; iCnt < numThreads; ++iCnt) {	//Note, currently hardwiring in begin at 0
+		plusEqualsStruct(&holdAccumGradients[0], &holdAccumGradients[iCnt]);
+	}
+
+	*cost = tempCost / double(end - begin);
+	printf("\nCost in calcGradientPartsCUDA ");
+	printf("\t%f", *cost);
+
+}
 void makeGradPassC(CNNStructureC* testStruct, CNNStructureC* tempGradStruct, reducedLayerNodesC* nodesForUpdating,
 	dataC* data, size_t whichCase){
 	// The goal here is to create the gradient for the single test case. 
@@ -314,8 +394,8 @@ void makeGradPassC(CNNStructureC* testStruct, CNNStructureC* tempGradStruct, red
 /*Memory consideration: I have three vectors (pCPA, partRelu, and temppCpA that will be taking on varying size
 as I go through the layers. Rather than resizing the vectors, I'm just going to allocate the memory for the largest
 value that they will take on. Note, that I could define these once outside of here. However, at this point in my understanding, 
-I think that would introduce a problem when going higly parallel, i.e., each thread should have its own copy. 
-A likely more efficient way would be to mae an array of each of these, then send one each into this function. Ideally,
+I think that would introduce a problem when going highly parallel, i.e., each thread should have its own copy. 
+A likely more efficient way would be to make an array of each of these, then send one each into this function. Ideally,
 you could leave them in place (not have to move them on, off, or create on the device each time you run this.*/
 /*In going parallel, I now get the first layer nodes from the data input nodes. Then, the rest of the nodes (hidden layers and 
 output nodes) come from the reducedForUpdate nodes. */
@@ -405,5 +485,115 @@ output nodes) come from the reducedForUpdate nodes. */
 	free(partRelu);
 	free(temppCpA);
 }
+
+void makeGradPassCUDA(CNNStructureC* testStruct, CNNStructureCFlat* tempGradStruct, reducedLayerNodesC* nodesForUpdating,
+	dataC* data, size_t whichCase) {
+	// The goal here is to create the gradient for the single test case. 
+	// There are multiple terms that need to be multiplied
+	// together to form each element. Complete a layer (from back to front) 
+	// before proceding to the next layer. The reason is that you need the results of layer L
+	// inorder to get a cost for L-1.
+
+/*Memory consideration: I have three vectors (pCPA, partRelu, and temppCpA that will be taking on varying size
+as I go through the layers. Rather than resizing the vectors, I'm just going to allocate the memory for the largest
+value that they will take on. Note, that I could define these once outside of here. However, at this point in my understanding,
+I think that would introduce a problem when going highly parallel, i.e., each thread should have its own copy.
+A likely more efficient way would be to make an array of each of these, then send one each into this function. Ideally,
+you could leave them in place (not have to move them on, off, or create on the device each time you run this.*/
+/*In going parallel, I now get the first layer nodes from the data input nodes. Then, the rest of the nodes (hidden layers and
+output nodes) come from the reducedForUpdate nodes. */
+//Find the largest size vector (Note, that is a number that could be precalculated and sent in).
+	size_t indexFlatten;
+	size_t maxNodes = 0;
+	for (size_t iCnt = 0; iCnt < testStruct->layerNodes.numLayers; ++iCnt) {
+		if (testStruct->layerNodes.numNodes[iCnt] > maxNodes) {
+			maxNodes = testStruct->layerNodes.numNodes[iCnt];
+		}
+	}
+	double* pCpA = (double*)malloc(maxNodes * sizeof(double));
+	double* partRelu = (double*)malloc(sizeof(double)*maxNodes);
+	double* temppCpA = (double*)malloc(sizeof(double)*maxNodes);
+
+	size_t startLayer = testStruct->layerNodes.numLayers - 1;
+
+	for (size_t iCnt = 0; iCnt < testStruct->layerNodes.numNodes[startLayer]; ++iCnt) {
+		pCpA[iCnt] = 2.*(nodesForUpdating->nodes[whichCase][startLayer - 1][iCnt] - data->outputNodes[whichCase][iCnt]);
+		//		pCpA[iCnt] = 2.*(testStruct->layerNodes.values[startLayer][iCnt] - desired[iCnt]);
+	}
+
+	for (size_t layerCount = startLayer; layerCount > 0; --layerCount) {
+		if (layerCount == 1) {
+			matVecMultC(testStruct->weights.values[layerCount - 1],
+				data->inputNodes[whichCase], testStruct->weights.numRows[layerCount - 1],
+				testStruct->weights.numCols[layerCount - 1], partRelu);
+
+		}
+		else
+		{
+			matVecMultC(testStruct->weights.values[layerCount - 1],
+				nodesForUpdating->nodes[whichCase][layerCount - 2], testStruct->weights.numRows[layerCount - 1],
+				testStruct->weights.numCols[layerCount - 1], partRelu);
+		}
+		//The implication of these next lines would seem to be that you do not use the final layer in calculating partRelu. 
+		//I have carried that into the above. 
+		//			matVecMultC(testStruct->weights.values[layerCount - 1],
+		//			testStruct->layerNodes.values[layerCount - 1], testStruct->weights.numRows[layerCount - 1],
+		//			testStruct->weights.numCols[layerCount - 1], partRelu);
+
+				//Sigma
+		for (size_t rowCount = 0; rowCount < testStruct->weights.numRows[layerCount - 1] - 1; ++rowCount) {
+
+			if (partRelu[rowCount] < 0.) {
+				partRelu[rowCount] = 0.;
+			}
+			else {
+				partRelu[rowCount] = 1.;
+			}
+			//			partRelu[rowCount] = 1.;	//uncomment here and comment above to Kill sigma till you understand it.
+
+			for (size_t colCount = 0; colCount < tempGradStruct->weights.numCols[layerCount - 1] - 1; ++colCount) {
+				//(partial z wrt w)*partial relu*pCpA
+				if (layerCount == 1) {
+					indexFlatten = tempGradStruct->weights.startLayer[layerCount - 1] + 
+						tempGradStruct->weights.numCols[layerCount-1]*rowCount + colCount;
+
+					tempGradStruct->weights.values[indexFlatten] +=
+						data->inputNodes[whichCase][colCount] * partRelu[rowCount] * pCpA[rowCount];
+				}
+				else {
+					indexFlatten = tempGradStruct->weights.startLayer[layerCount - 1] +
+						tempGradStruct->weights.numCols[layerCount - 1] * rowCount + colCount;
+					tempGradStruct->weights.values[indexFlatten] +=
+						nodesForUpdating->nodes[whichCase][layerCount - 2][colCount] * partRelu[rowCount] * pCpA[rowCount];
+				}
+
+				//				tempGradStruct->weights.values[layerCount - 1][rowCount][colCount] +=
+				//					testStruct->layerNodes.values[layerCount - 1][colCount] * partRelu[rowCount] * pCpA[rowCount];
+			}
+			// Each row also has a bias term at the end of the row.
+			indexFlatten = tempGradStruct->weights.startLayer[layerCount - 1] +
+				tempGradStruct->weights.numCols[layerCount - 1] * rowCount + testStruct->weights.numCols[layerCount - 1] - 1;
+			tempGradStruct->weights.values[indexFlatten] += partRelu[rowCount] * pCpA[rowCount];
+		}
+		if (layerCount > 1) {
+
+			//Calculate the pCpA host_vector for the next round.
+			for (size_t colCount = 0; colCount < testStruct->weights.numCols[layerCount - 1] - 1; ++colCount) {
+				double tempSum = 0.;
+				for (size_t rowCount = 0; rowCount < testStruct->weights.numRows[layerCount - 1] - 1; ++rowCount) {
+					tempSum += testStruct->weights.values[layerCount - 1][rowCount][colCount] * partRelu[rowCount] * pCpA[rowCount];
+				}
+				temppCpA[colCount] = tempSum;
+			}
+			for (size_t colCount = 0; colCount < testStruct->weights.numCols[layerCount - 1] - 1; ++colCount) {
+				pCpA[colCount] = temppCpA[colCount];
+			}
+		}
+	}
+	free(pCpA);
+	free(partRelu);
+	free(temppCpA);
+}
+
 
 

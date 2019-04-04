@@ -29,6 +29,7 @@ public:
 	void writeToFile(const string& fileName);
 	host_vector<int> readFromFile(const string& inFileName);
 	void setToZeros();
+	void setWeights(size_t layer, size_t row, size_t col, double value = 0.);
 	host_vector<host_vector<host_vector<double>>>& getWeights() { return(weights); }
 	host_vector<host_vector<double>>& getLayerNodes() { return(layerNodes); }
 
